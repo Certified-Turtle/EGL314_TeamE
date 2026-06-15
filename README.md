@@ -38,3 +38,7 @@ numpy
 pygrabber
 python-osc==1.8.1
 ```
+### Install this in your terminal after creating requirements.txt:
+``` bash
+pip install -r requirements.txt
+```
