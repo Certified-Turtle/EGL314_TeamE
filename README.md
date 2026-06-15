@@ -9,11 +9,13 @@ A fun game developed in python that integrates OpenCV and Mediapipe (Real time h
 ---
 ## 1. Create Conda environment
 The Conda environment acts as a dedicated workshop for our 'Whack-a-Ghost' game, ensuring that the specific versions of OpenCV, MediaPipe, and other tools you need are kept isolated so they don't crash or conflict with other projects on your computer.
+
+### Install this in your terminal
 ```bash
 conda create --name <env_name> python=3.10.0
 conda activate <env_name>
 ```
---
+---
 ## 2. Installing your dependencies
 Dependencies are like pre-manufactured parts—like circuit boards or sensors—that you'd buy from a hardware store instead of building them from scratch, allowing our team to focus on designing the game logic rather than reinventing the fundamental tools for vision and input.
 
@@ -42,3 +44,22 @@ python-osc==1.8.1
 ``` bash
 pip install -r requirements.txt
 ```
+
+## Game Files
+| File | Description |
+| `addons.py` | |
+| `audio.py` | |
+| `config.py` | |
+| `designs.py` | |
+| `gameplay.py` | |
+| `lighting.py` | |
+| `main.py` | |
+| `opencv.py` | |
+| `oscserver.py` | |
+| `requirements.txt` | |
+| `restart_quit.py` | |
+| `start_button.py`| |
+| `tutorial.py` | |
+| `webcam_test.py`| |
+
+
