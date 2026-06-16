@@ -65,7 +65,7 @@ pip install -r requirements.txt
 | `webcam_test.py`| A standalone tool to verify webcam connectivity. |
 
 
- ### [Click here to view the README for each .py file](Documentation/)
+ ### [Click here to view the README for each .py file for more details](POC/Documentation/)
 
 ## What you'll need:
 1. Webcam (Built-in/ external)
