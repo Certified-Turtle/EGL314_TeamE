@@ -1,6 +1,6 @@
 # EGL314
 ## Whack-A-Ghost OpenCV + MediaPipe Game (POC)  
-A fun game developed in python that integrates OpenCV and Mediapipe (Real time hand/colour tracking), GrandMA3 lighting fixtures and wall mounted speakers.
+An interactive game developed in python that integrates OpenCV and Mediapipe (Real time hand/colour tracking), GrandMA3 lighting fixtures and laptop speakers via L-ISA and Reaper.
 
 ---
 
@@ -47,20 +47,21 @@ pip install -r requirements.txt
 
 ## Game Files
 | File | Description |
-| `addons.py` | |
-| `audio.py` | |
-| `config.py` | |
-| `designs.py` | |
-| `gameplay.py` | |
-| `lighting.py` | |
-| `main.py` | |
-| `opencv.py` | |
-| `oscserver.py` | |
-| `requirements.txt` | |
-| `restart_quit.py` | |
-| `start_button.py`| |
-| `tutorial.py` | |
-| `webcam_test.py`| |
+| :--- | :--- |
+| `addons.py` | Handles secondary mechanics: Gesture loading bars, decoy logic, difficulty ramping. |
+| `audio.py` | Bridges the game to REAPER via Open Sound Control (OSC) to trigger sounds and transport controls. |
+| `config.py` | The central hub where the game's settings, such as screen dimensions, colour codes and difficulty levels are stored. |
+| `designs.py` | The visual rendering engine; draws backgrounds, particles, character and UI elements. |
+| `gameplay.py` | Manages core game rules: hit detection, movement intervals, scoring and entity states.|
+| `lighting.py` | Acts as a DMX/GrandMA3 lighting controller, sending OSC commands for visual effects. |
+| `main.py` | This file contains the main .py file that uses each .py file to create the game. |
+| `opencv.py` | Processes webcam frames, handles colour tracking and evaluates hand gesture geometry |
+| `oscserver.py` | The "Central Router"; receives OSC from the game and forwards it to Audio/Lighting/Spatial systems. |
+| `requirements.txt` | This file contains the dependencies mentioned earlier. |
+| `restart_quit.py` | Handles end-game state resets and renders the game-over result screen. |
+| `start_button.py`| Manages the interaction logic for the game's startup menu. |
+| `tutorial.py` | Renderrs the instructional and tutorial logic for the game's startup menu | 
+| `webcam_test.py`| A standalone tool to verify webcam connectivity. |
 
 
  ### [Click here to view the README for each .py file](Documentation/)
