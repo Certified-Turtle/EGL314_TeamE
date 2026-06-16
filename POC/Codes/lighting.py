@@ -11,11 +11,9 @@ import pygame
 from pythonosc import udp_client
  
 # =================================================================
-# === GMA3 CONNECTION — EDIT THESE ===
+# === GMA3 CONNECTION ===
 # =================================================================
-# GMA3_IP   = "192.168.254.18"   # GMA3 laptop
-# GMA3_PORT = 8000
-# GMA3_ADDR = "/gma3/cmd"
+
  
 GMA3_IP   = "192.168.254.252"  
 GMA3_PORT = 8000
@@ -207,11 +205,11 @@ def _fire_spotlight():
     _send(f"{SPOTLIGHT_FIXTURE} At {SPOTLIGHT_DIMMER}")
     print(f"[LIGHTING] Spotlight ON — {SPOTLIGHT_FIXTURE} at {SPOTLIGHT_DIMMER}%")
     
-    
-def _send(message: str):
-    try:
-        client = udp_client.SimpleUDPClient(GMA3_IP, GMA3_PORT)
-        client.send_message(GMA3_ADDR, message)
-        print(f"[LIGHTING SENT] → {message}")  # ← add back temporarily
-    except Exception as e:
-        print(f"[LIGHTING] OSC send failed: {e}")
+# Test lights
+# def _send(message: str):
+#     try:
+#         client = udp_client.SimpleUDPClient(GMA3_IP, GMA3_PORT)
+#         client.send_message(GMA3_ADDR, message)
+#         print(f"[LIGHTING SENT] → {message}")  # ← add back temporarily
+#     except Exception as e:
+#         print(f"[LIGHTING] OSC send failed: {e}")
