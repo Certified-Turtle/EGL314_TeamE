@@ -60,8 +60,14 @@ pip install -r requirements.txt
 | `requirements.txt` | This file contains the dependencies mentioned earlier. |
 | `restart_quit.py` | Handles end-game state resets and renders the game-over result screen. |
 | `start_button.py`| Manages the interaction logic for the game's startup menu. |
-| `tutorial.py` | Renderrs the instructional and tutorial logic for the game's startup menu | 
+| `thumbsup.csv` | Originally meant for thumbs up gestures but configured to recognise an OK sign for easier hand landmark recognition. |
+| `tutorial.py` | Renders the instructional and tutorial logic for the game's startup menu | 
 | `webcam_test.py`| A standalone tool to verify webcam connectivity. |
 
 
  ### [Click here to view the README for each .py file](Documentation/)
+
+## What you'll need:
+1. Webcam (Built-in/ external)
+2. Laptop monitor/ External monitor
+3. A bright green object.
