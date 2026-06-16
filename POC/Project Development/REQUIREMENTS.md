@@ -1,0 +1,7 @@
+opencv-python
+mediapipe==0.10.9
+pyautogui
+pynput
+numpy
+pygrabber
+python-osc==1.8.1
