@@ -1,1 +1,1 @@
-Test commit
+audio.py runs when main.py runs, plays BGM (starting at marker 1)
