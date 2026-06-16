@@ -70,4 +70,4 @@ pip install -r requirements.txt
 ## What you'll need:
 1. Webcam (Built-in/ external)
 2. Laptop monitor/ External monitor
-3. A bright green object.
+3. A bright green object, preferably a vibrant or neon green.
