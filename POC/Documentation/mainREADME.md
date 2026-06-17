@@ -44,6 +44,7 @@ import audio
 By importing these modules, you reduce the chances of having your main code being thousands of lines long. If you make a mistake in the code, you would have to search through a long list of code to find it.
 
 | Module | Function |
+| :--- | :--- |
 | `import designs` | Contains all the code for drawing the background, graveyard, even the ghosts themselves. |
 | `import opencv` | This handles all the "camera" work. It looks at the raw video feed, finds your hand and figures out where you're pointing. |
 | `import start_button` and `import tutorial` | These files manage the "Welcome" screens, the instructions, and the "How-to-play" guide, to ensure the player knows what to do even before the game starts. |
@@ -194,7 +195,15 @@ while True:
 
 ## Section 3
 
-The entire while loop synchronizes the virtual game with the physical room environment 60 times per second. 
+This while True loop is the endless heartbeat of the game. Because it is set to True, it runs continuously, repeating its entire sequence of instructions roughly 60 times every second until you force the program to close. Without this loop, the code would run once from top to bottom and finish, causing the game to close instantly.
+
+Everytime the loop restarts, it performs these 3 vital tasks.
+
+| Task | Purpose |
+| :--- | :--- |
+| Checks the inputs | It checks the camear to see where the player is pointing and listens for keyboard commands like pressing 'Escape' to quit or 'C' for the camera debug window. |
+| Logic | It updates the game by moving the ghosts, checking if the player's hand overlaps with a target, manages the game timer and decides which game phase is currently active. |
+| Checks outputs | It triggers physical room effects like sending an OSC signal to flash the room lights and refreshes the display by drawing the latest frame onto the monitor. |
 
 Some control functions include:
 
@@ -203,4 +212,5 @@ Some control functions include:
 | `pygame.QUIT` / `K_ESCAPE` | The 'Kill Switch'. This immediately shuts down the program and safely cleans up your camera and network connections. |
 | `K_c` | The debug camera toggle. It toggles the small camera window on/off, allowing you to see if the computer vision is still detecting the player correctly.
 | `K_r` | (Reset) During the PHASE_GAMEOVER state, this triggers the restart_quit.reset_game(). It wipes the scores, resets the spawn pointers and restarts the room lighting system to clear the previous game session. |
+
 
