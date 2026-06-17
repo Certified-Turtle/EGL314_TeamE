@@ -64,6 +64,16 @@ pip install -r requirements.txt
 | `tutorial.py` | Renders the instructional and tutorial logic for the game's startup menu | 
 | `webcam_test.py`| A standalone tool to verify webcam connectivity. |
 
+## Game flow
+```mermaid
+graph TD
+    A[Launch Game] --> B[Initialization/Setup]
+    B --> C[Main Gameplay Loop]
+    C --> D[Drawing/UI]
+    C --> E[Camera/Input Processing]
+    C --> F[Networking/Lighting]
+```
+
 
  ### [Click here to view the README for each .py file for more details](POC/Documentation/)
 
