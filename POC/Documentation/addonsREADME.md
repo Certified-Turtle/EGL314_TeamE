@@ -33,7 +33,6 @@ This draws the progress bar shown while the player holds up a thumbs-up gesture 
 3. Draws a green border outline around the whole bar.
 4. Renders text above the bar showing the percentage, e.g. "CALIBRATING GESTURE: 62%".
 
-Note: the `is_thumbs_up` parameter is passed in but never used inside the function — the actual progress value is read directly from `config.gesture_hold_progress`, which must be updated elsewhere in the codebase.
 
 ## Section 2: Decoy Spawning
 
