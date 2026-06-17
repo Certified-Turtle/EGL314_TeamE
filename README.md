@@ -68,10 +68,10 @@ pip install -r requirements.txt
 ```mermaid
 graph TD
     A[Launch Game] --> B[Initialization/Setup]
-    B --> C[Main Gameplay Loop]
-    C --> D[Drawing/UI]
-    C --> E[Camera/Input Processing]
-    C --> F[Networking/Lighting]
+    B --> C[Main Loop]
+    C --> D[UI/Designs]
+    C --> E[Gameplay]
+    C --> F[Audio/Lighting]
 ```
 
 
