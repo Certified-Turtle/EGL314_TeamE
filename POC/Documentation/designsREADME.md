@@ -74,4 +74,4 @@ cached_ghost_surf = pygame.Surface((300, 400), pygame.SRCALPHA).convert_alpha()
 
 This code draws the cemetery background, tombstones and the dead tree.
 
-![Cemetery Background](../POC/Images/CemeteryBackground.jpg)
+![Cemetery Background](Images/CemeteryBackground.jpg)
