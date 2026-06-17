@@ -2,7 +2,7 @@
 
 ---
 
-This file draws and runs the intro screen for "Haunted Manor: Ghost Hunt" — the title screen the player sees before anything else, where they hover the crosshair over a button to begin.
+This file draws and runs the intro screen for "Whack-a-Ghost" — the title screen the player sees before anything else, where they hover the crosshair over a button to begin.
 
 ```python
 import pygame

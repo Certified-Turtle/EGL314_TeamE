@@ -77,3 +77,4 @@ Regardless of whether the test succeeded or failed, the script releases the came
 | Function | Purpose |
 | :--- | :--- |
 | `run_isolated_test()` | Opens the webcam, checks if it powers on and streams real frames, shows a live preview if successful, and reports the likely cause if any step fails. |
+

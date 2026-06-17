@@ -2,7 +2,7 @@
 
 ---
 
-This file handles two features for "Haunted Manor: Ghost Hunt": the gesture-calibration loading bar shown before gameplay starts, and the decoy ghost (the one that penalizes the player for whacking it). It reads and writes shared values stored in `config.py` so the rest of the game can react to what's happening here.
+This file handles two features for "Whack-a-Ghost": the gesture-calibration loading bar shown before gameplay starts, and the decoy ghost (the one that penalizes the player for whacking it). It reads and writes shared values stored in `config.py` so the rest of the game can react to what's happening here.
 
 ```bash
 import pygame

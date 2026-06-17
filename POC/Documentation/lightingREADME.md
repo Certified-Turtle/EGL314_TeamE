@@ -2,7 +2,7 @@
 
 ---
 
-This code controls the lighting effects for the "Haunted Manor: Ghost Hunt" game. While `main.py` runs the game logic, `lighting.py` only handles sending commands over the network to the GMA3 lighting console, so the room lights react to what's happening in the game.
+This code controls the lighting effects for the "Whack-a-Ghost" game. While `main.py` runs the game logic, `lighting.py` only handles sending commands over the network to the GMA3 lighting console, so the room lights react to what's happening in the game.
 
 We start off with importing the following libraries:
 
