@@ -2,6 +2,8 @@
 
 ---
 
+This code runs the audio part of the game
+
 ## Section 1: Imports (setting up tools)
 
 `pythonosc.udp_client` is used to send OSC (Open Sound Control) messages over a network using UDP.  
