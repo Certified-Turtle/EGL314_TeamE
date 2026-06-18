@@ -2,6 +2,8 @@
 
 ---
 
+This code is the logic behind gameplay elements (spawn layouts, animations, sprites, design and timer)
+
 ## Section 1: Imports and Global Setup
 
 ```python
