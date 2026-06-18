@@ -4,7 +4,7 @@
 
 ## Section 1: Imports (setting up tools)
 
-`pythonosc.udp_client` is used to send OSC (Open Sound Control) messages over a network using UDP.
+`pythonosc.udp_client` is used to send OSC (Open Sound Control) messages over a network using UDP.  
 `time` is used to create delays before the next line of code runs.
 
 This section loads the tools the script needs:
