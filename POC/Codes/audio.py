@@ -17,3 +17,6 @@ client = udp_client.SimpleUDPClient(PI_A_ADDR, PORT)
 send_message(client, "/action/40161")
 #Play
 send_message(client, "/action/40073")
+#End
+time.sleep(40)
+send_message(client, "/action/1016")
