@@ -313,6 +313,9 @@ while True:
                 speed_warning_active = False  
 
             time_left = max(0, 30 - seconds_in_game)
+            if time_left == 10:
+                lighting.on_countdown()
+
             if time_left == 0: 
                 game_phase = PHASE_GAMEOVER
                 if score >= 15:
