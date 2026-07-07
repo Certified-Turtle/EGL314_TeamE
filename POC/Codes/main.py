@@ -23,36 +23,29 @@ import audio
 # =================================================================
 print("[INFO] Running in safe, local-only offline mode.")
 
-os.environ['SDL_RENDER_SCALE_QUALITY'] = 'linear'  # Forces GPU to smooth textures cleanly
+os.environ['SDL_RENDER_SCALE_QUALITY'] = 'linear'
 pygame.init()
 
-# Automatically grab your monitor's native dimensions on boot
 monitor_info = pygame.display.Info()
 NATIVE_WIDTH = monitor_info.current_w
 NATIVE_HEIGHT = monitor_info.current_h
 
-# Lock your internal gameplay boundaries to a stable 1080p profile
 WIDTH, HEIGHT = 1920, 1080
 
-# Build the borderless window container across the native screen pixels
 real_screen = pygame.display.set_mode(
     (NATIVE_WIDTH, NATIVE_HEIGHT), 
     pygame.NOFRAME | pygame.DOUBLEBUF
 )
 
-# Instantiate the virtual canvas surface that all your modules draw onto
 screen = pygame.Surface((WIDTH, HEIGHT))
-
-# Create a dedicated transparent scratchpad surface for the vortex death animations
 designs.vortex_scratch_surf = pygame.Surface((300, 150), pygame.SRCALPHA)
 
 pygame.display.set_caption("Haunted Manor: Ghost Hunt")
 clock = pygame.time.Clock()
 
-active_entity_type = "GHOST"   # "GHOST" or "DECOY"
+active_entity_type = "GHOST"
 speed_multiplier = 1.0
-last_speed_bump_time = 0       # Monitors game speed step changes
-# Speed warning configuration variables
+last_speed_bump_time = 0
 speed_warning_active = False
 speed_warning_start_ticks = 0
 
@@ -83,7 +76,6 @@ ghost_state = "UP"
 death_sequences = []
 
 # ---- CENTRAL NETWORKING TARGETS ----
-# Point these directly out to your Central Router machine (IP: 192.168.254.58, Port: 2000)
 ROUTER_IP = "192.168.254.58"
 ROUTER_PORT = 2000
 show_router_client = udp_client.SimpleUDPClient(ROUTER_IP, ROUTER_PORT)
@@ -97,19 +89,18 @@ reaper_sender = udp_client.SimpleUDPClient(REAPER_LAPTOP_IP, 8000)
 total_ghosts_spawned = 0
 total_decoys_spawned = 0
 show_debug_camera = True
-ready_timer = 0  # Pre-declared to enforce proper local scope memory layout
+ready_timer = 0
 
-# === CONTROLLED SPAWN POOL ===
 spawn_pool = [
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",   # Decoy 1 (Index 6)
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",   # Decoy 2 (Index 13)
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",   # Decoy 3 (Index 20)
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",   # Decoy 4 (Index 27)
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",   # Decoy 5 (Index 34)
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",   # Decoy 6 (Index 41)
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",   # Decoy 7 (Index 48)
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST",   # Clean Run to finish (49-55)
-    "GHOST"                                                          # Final element (56)
+    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",
+    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",
+    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",
+    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",
+    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",
+    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",
+    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",
+    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST",
+    "GHOST"
 ]
 pool_pointer = 0
 
@@ -122,7 +113,10 @@ cursor_pos = [int(cursor_vector.x), int(cursor_vector.y)]
 cap = None
 reference_ok_sign = None  
 camera_fully_initialized = False
-camera_trigger_time = None  
+camera_trigger_time = None
+
+# Track phase transitions so lighting only fires ONCE per phase change
+last_game_phase = None
 
 # --- 3. MAIN RUNTIME LOOP ---
 while True:
@@ -149,23 +143,59 @@ while True:
             cap = opencv.init_camera()
             reference_ok_sign = opencv.load_relational_gesture_csv("thumbsup.csv")
             camera_fully_initialized = True
-            lighting.init()
+            lighting.init()             # Spooky atmosphere starts immediately on load
             last_move_time = pygame.time.get_ticks()
         
         clock.tick(60)
-        continue  
-    
-    # Atmospheric Lightning Engine Context
+        continue
+
+    # =================================================================
+    # === PHASE CHANGE LIGHTING TRIGGERS ===
+    # Fire lighting calls ONCE when the phase changes, not every frame
+    # =================================================================
+    if game_phase != last_game_phase:
+        if game_phase == PHASE_INTRO:
+            # Intro screen — spooky atmosphere, lightning off
+            # Already set by init() but reaffirm on restart
+            pass
+
+        elif game_phase == PHASE_TUTORIAL:
+            # Tutorial begins — enable lightning, spooky atmosphere continues
+            lighting.on_tutorial_start()
+
+        elif game_phase == PHASE_INSTRUCT:
+            # Thumbs up check — calm white/blue, lightning stops
+            lighting.on_thumbsup_check()
+
+        elif game_phase == PHASE_PREPARE:
+            # Thumbs up accepted — spooky restored, lightning back on, tension builds
+            lighting.on_thumbsup_accepted()
+
+        elif game_phase == PHASE_GAMEPLAY:
+            # Game starts — lightning already on from tutorial
+            # Nothing extra needed here, spooky atmosphere carries over
+            pass
+
+        elif game_phase == PHASE_GAMEOVER:
+            # Win/lose handled below where score is checked
+            pass
+
+        last_game_phase = game_phase
+
+    # =================================================================
+    # === ATMOSPHERIC LIGHTNING ENGINE ===
+    # =================================================================
     if lightning_active:
-        if now - lightning_trigger_time > lightning_duration: lightning_active = False
+        if now - lightning_trigger_time > lightning_duration:
+            lightning_active = False
     else:
         if random.random() < (0.005 if time_left > 10 else 0.025):
             lightning_active = True
             lightning_trigger_time = now
             lightning_duration = random.randint(80, 220)
-            lighting.on_lightning_flash()
+            lighting.on_lightning_flash()   # All Mistrals snap white
 
-    # Scenery routing mapping
+    # Scenery routing
     is_tutorial_scene = game_phase in [PHASE_TUTORIAL, PHASE_INSTRUCT, PHASE_PREPARE]
     if game_phase == PHASE_INTRO:
         screen.fill((10, 8, 20))
@@ -175,7 +205,7 @@ while True:
         designs.draw_haunted_house(screen, lightning_active)
         
     # =================================================================
-    # === COMPRESSED COMPUTER VISION PIPELINE MATRIX ===
+    # === COMPUTER VISION PIPELINE ===
     # =================================================================
     need_hand_skeleton = (game_phase == PHASE_INSTRUCT)
     
@@ -229,7 +259,9 @@ while True:
         cursor_pos[0] = int(cursor_vector.x)
         cursor_pos[1] = int(cursor_vector.y)
 
-    # Pygame Native Event Loop Processing
+    # =================================================================
+    # === EVENT LOOP ===
+    # =================================================================
     for event in pygame.event.get():
         if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
             pygame.quit(); sys.exit()
@@ -240,7 +272,8 @@ while True:
                 print(f"[UI] Debug camera window visibility set to: {show_debug_camera}")
         
         if game_phase == PHASE_GAMEOVER and event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_q: pygame.quit(); sys.exit()
+            if event.key == pygame.K_q:
+                pygame.quit(); sys.exit()
             if event.key == pygame.K_r: 
                 score, time_left, start_ticks, current_hole, _ = restart_quit.reset_game()
                 tutorial_count = 0; game_phase = PHASE_INTRO; death_sequences = []
@@ -248,11 +281,17 @@ while True:
                 total_ghosts_spawned = 0
                 total_decoys_spawned = 0
                 pool_pointer = 0
-                lighting.on_game_restart()
+                last_speed_bump_time = 0        # Reset speed bump
+                speed_warning_active = False    # Reset speed warning
+                last_game_phase = None          # Force phase change triggers to re-fire
+                lighting.on_game_restart()      # Restore spooky atmosphere
 
+    # Run lighting update every frame — handles flash cutoffs and pulses
     lighting.update()
 
-    # Phase State Machine Routing Engine
+    # =================================================================
+    # === PHASE STATE MACHINE ===
+    # =================================================================
     thumbs_up_active = False
     if game_phase == PHASE_INTRO:
         hover_start_progress = start_button.handle_intro_phase(screen, title_font, ui_font, cursor_pos, hover_start_progress)
@@ -265,11 +304,7 @@ while True:
         game_phase = PHASE_INSTRUCT
         
     elif game_phase == PHASE_INSTRUCT:
-        if not cv_data:
-            pass
-        elif cv_data[2] is None:
-            pass
-        else:
+        if cv_data and cv_data[2] is not None:
             landmarks = cv_data[2].landmark
             if opencv.check_csv_ok_sign(landmarks, reference_ok_sign, threshold=3.0):
                 thumbs_up_active = True
@@ -297,6 +332,10 @@ while True:
             game_phase, int_cursor_pos, current_hole, ghost_state, ghost_y_offset, 
             tutorial_count, score, death_sequences, now, active_entity_type, True
         )
+
+        # Decoy hit reaction — full room red flash
+        if hit and active_entity_type == "DECOY" and game_phase == PHASE_GAMEPLAY:
+            lighting.on_decoy_hit()
         
         if game_phase == PHASE_GAMEPLAY:
             seconds_in_game = (now - start_ticks) // 1000
@@ -310,24 +349,26 @@ while True:
             elif seconds_in_game >= 15 and last_speed_bump_time == 0:
                 speed_multiplier = 2.0  
                 last_speed_bump_time = 15
-                speed_warning_active = False  
+                speed_warning_active = False
 
             time_left = max(0, 30 - seconds_in_game)
+
+            # Last 10 seconds — all fixtures shift to tense red
             if time_left == 10:
                 lighting.on_countdown()
 
-            if time_left == 0: 
+            # Game over — win or lose lighting
+            if time_left == 0:
                 game_phase = PHASE_GAMEOVER
                 if score >= 15:
-                    lighting.on_win()
+                    lighting.on_win()       # Full room celebration
                 else:
-                    lighting.on_lose()
+                    lighting.on_lose()      # Full room doom + heartbeat
 
         move_interval = int(1300 / speed_multiplier)
         config.current_move_interval = move_interval
         old_hole = current_hole
 
-        # UPDATED: Passing show_router_client instead of dead osc_client variable
         ghost_state, ghost_y_offset, current_hole, last_move_time, active_entity_type = gameplay.update_ghost_movement(
             ghost_state, ghost_y_offset, current_hole, last_move_time, move_interval, now, game_phase, show_router_client, active_entity_type
         )
@@ -343,13 +384,11 @@ while True:
             else:
                 if pool_pointer < len(spawn_pool):
                     active_entity_type = spawn_pool[pool_pointer]
-                    
                     if active_entity_type == "GHOST":
                         total_ghosts_spawned += 1
                     elif active_entity_type == "DECOY":
                         total_decoys_spawned += 1
                         print(f"[TRACKER] Decoy #{total_decoys_spawned} spawned at index {pool_pointer}")
-                        
                     pool_pointer += 1
                 else:
                     ghost_state = "DOWN"
@@ -390,7 +429,7 @@ while True:
     elif game_phase == PHASE_GAMEOVER:
         restart_quit.render_game_over_screen(screen, score)
 
-    # === LIVE CAMERA DEBUG WINDOW LAYER ===
+    # === LIVE CAMERA DEBUG WINDOW ===
     if game_phase in [PHASE_INTRO, PHASE_TUTORIAL, PHASE_GAMEPLAY, PHASE_INSTRUCT] and rgb_frame is not None and show_debug_camera:
         camera_surface = pygame.surfarray.make_surface(rgb_frame.swapaxes(0, 1))
         debug_w, debug_h = 320, 240
@@ -416,7 +455,6 @@ while True:
         debug_txt = pygame.transform.scale(debug_txt, (80, 18))
         screen.blit(debug_txt, (dx + 10, dy + debug_h + 12))
 
-    # Scale to match native monitor dimensions layout cleanly
     scaled_surface = pygame.transform.scale(screen, (NATIVE_WIDTH, NATIVE_HEIGHT))
     real_screen.blit(scaled_surface, (0, 0))
 

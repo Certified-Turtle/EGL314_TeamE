@@ -520,3 +520,82 @@ def update():
 
             _lose_pulse_last_ms = now
             # Lose pulse keeps going until restart — no step limit
+
+
+# =================================================================
+# === TEST BLOCK — DELETE AFTER TESTING ===
+# =================================================================
+if __name__ == "__main__":
+    import time
+    import random
+    pygame.init()
+
+    print("=== FULL ROOM HARDCODED LIGHTING TEST ===")
+    print(f"Sending to {GMA3_IP}:{GMA3_PORT}")
+    print(f"Controlling {len(ALL_FIXTURES)} fixtures total")
+    print()
+
+    print("1. Init — all fixtures spooky atmosphere...")
+    init()
+    time.sleep(3)
+
+    print("2. Tutorial start — lightning enabled...")
+    on_tutorial_start()
+
+    start = time.time()
+    while time.time() - start < 15:
+        remaining = 30 - (time.time() - start)
+        print(f"Time left: {remaining:.0f}s")
+
+        if random.random() < 0.4:
+            on_lightning_flash()
+            time.sleep(FLASH_DURATION_MS / 1000)
+            for fix in FLASH_FIXTURES:
+                _set_dimmer(fix, 0)
+            _flash_active = False
+
+        if random.random() < 0.2:
+            on_decoy_hit()
+            time.sleep(DECOY_FLASH_DURATION_MS / 1000)
+            _setup_spooky()
+            _decoy_flash_active = False
+
+        time.sleep(0.8)
+
+    print()
+    print("3. Countdown — full room red...")
+    on_countdown()
+
+    start = time.time()
+    while time.time() - start < 10:
+        remaining = 10 - (time.time() - start)
+        print(f"Time left: {remaining:.0f}s")
+
+        if random.random() < 0.6:
+            on_lightning_flash()
+            time.sleep(FLASH_DURATION_MS / 1000)
+            for fix in FLASH_FIXTURES:
+                _set_dimmer(fix, 0)
+            _flash_active = False
+
+        time.sleep(0.8)
+
+    print()
+    print("4. WIN — full room celebration!")
+    on_win()
+    time.sleep(6)
+
+    print()
+    print("5. Restart...")
+    on_game_restart()
+    time.sleep(3)
+
+    print()
+    print("6. LOSE — full room doom + heartbeat!")
+    on_tutorial_start()
+    time.sleep(1)
+    on_lose()
+    time.sleep(6)
+
+    print()
+    print("=== TEST COMPLETE — delete test block when done ===")
