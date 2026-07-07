@@ -14,7 +14,6 @@ import gameplay
 import restart_quit
 import addons 
 import config
-import lighting
 from pythonosc import udp_client
 
 # =================================================================
@@ -174,7 +173,6 @@ while True:
             reference_ok_sign = opencv.load_relational_gesture_csv("thumbsup.csv")
             camera_fully_initialized = True
             last_move_time = pygame.time.get_ticks()
-            lighting.init()  # Bring up the spooky atmosphere once the camera is live
         
         clock.tick(60)
         continue  # Skip processing the rest of the loop until camera initialization finishes
@@ -187,10 +185,6 @@ while True:
             lightning_active = True
             lightning_trigger_time = now
             lightning_duration = random.randint(80, 220)
-            lighting.on_lightning_flash()
-
-    # Drive the physical lighting rig's timed effects every frame
-    lighting.update()
 
     # Scenery routing mapping
     is_tutorial_scene = game_phase in [PHASE_TUTORIAL, PHASE_TUTORIAL_MP, PHASE_INSTRUCT, PHASE_PREPARE]
@@ -352,7 +346,6 @@ while True:
                     multiplayer_mode = False
                     game_phase = PHASE_TUTORIAL
                     last_move_time = now
-                    lighting.on_tutorial_start()
                     print("[UI] Single player mode selected.")
                 elif event.key == pygame.K_m:
                     multiplayer_mode = True
@@ -360,7 +353,6 @@ while True:
                     mp_ghost_timer_debt = 0
                     game_phase = PHASE_TUTORIAL_MP
                     last_move_time = now
-                    lighting.on_tutorial_start()
                     print("[UI] Multiplayer mode selected — P2 purple tracking active.")
         
         if game_phase == PHASE_GAMEOVER and event.type == pygame.KEYDOWN:
@@ -388,8 +380,6 @@ while True:
                 mp_tracking_locked = False
                 mp_ghost_timer_debt = 0
 
-                lighting.on_game_restart()
-
     # Phase State Machine Routing Engine
     thumbs_up_active = False
     if game_phase == PHASE_INTRO:
@@ -415,11 +405,9 @@ while True:
 
     elif game_phase == PHASE_TUTORIAL and tutorial_count >= 5:
         game_phase = PHASE_INSTRUCT
-        lighting.on_thumbsup_check()
 
     elif game_phase == PHASE_TUTORIAL_MP and mp_tutorial_count >= 10:
         game_phase = PHASE_INSTRUCT
-        lighting.on_thumbsup_check()
         
     elif game_phase == PHASE_INSTRUCT:
         # 1. Broad Level Pipeline Check
@@ -444,7 +432,6 @@ while True:
                 config.gesture_hold_progress = 0  
                 game_phase = PHASE_PREPARE
                 ready_timer = now
-                lighting.on_thumbsup_accepted()
         else:
             config.gesture_hold_progress = max(0, config.gesture_hold_progress - 2)
 
@@ -478,14 +465,10 @@ while True:
         int_cursor_pos = [int(cursor_vector.x), int(cursor_vector.y)]
         
         # P1 hit check (green object)
-        entity_type_before_p1_hit = active_entity_type
         hit, tutorial_count, score, ghost_state, active_entity_type, death_sequences = gameplay.check_ghost_collisions(
             game_phase, int_cursor_pos, current_hole, ghost_state, ghost_y_offset, 
             tutorial_count, score, death_sequences, now, active_entity_type, True
         )
-
-        if hit and entity_type_before_p1_hit == "DECOY":
-            lighting.on_decoy_hit()
 
         # Increment combined MP tutorial counter if P1 landed a hit during MP training
         if hit and game_phase == PHASE_TUTORIAL_MP:
@@ -493,15 +476,11 @@ while True:
 
         # P2 hit check (purple object) — only if multiplayer on and P1 didn't already land a hit
         if multiplayer_mode and not hit:
-            entity_type_before_p2_hit = active_entity_type
             int_cursor_pos_p2 = [int(cursor_vector_p2.x), int(cursor_vector_p2.y)]
             p2_hit, tutorial_count, score, ghost_state, active_entity_type, death_sequences = gameplay.check_ghost_collisions(
                 game_phase, int_cursor_pos_p2, current_hole, ghost_state, ghost_y_offset,
                 tutorial_count, score, death_sequences, now, active_entity_type, True
             )
-
-            if p2_hit and entity_type_before_p2_hit == "DECOY":
-                lighting.on_decoy_hit()
 
             # Increment combined MP tutorial counter if P2 landed a hit during MP training
             if p2_hit and game_phase == PHASE_TUTORIAL_MP:
@@ -512,19 +491,12 @@ while True:
             seconds_in_game = (now - start_ticks) // 1000
             time_left = max(0, STAGE_DURATION - seconds_in_game)
 
-            if time_left <= 10:
-                lighting.on_countdown()
-
             if time_left == 0:
                 # Stage time is up — check if target was met
                 stage_passed = score >= STAGE_TARGETS[current_stage]
                 if current_stage == 3:
                     # Final stage done — go to game over regardless
                     game_phase = PHASE_GAMEOVER
-                    if stage_passed:
-                        lighting.on_win()
-                    else:
-                        lighting.on_lose()
                 else:
                     game_phase = PHASE_STAGE_CLEAR
                     stage_clear_hover = 0
