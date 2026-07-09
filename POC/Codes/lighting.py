@@ -26,25 +26,21 @@ GMA3_ADDR = "/gma3/cmd"
 # === FIXTURE GROUPS ===
 # =================================================================
 ALL_EPAR = [
-    "Fixture 101", "Fixture 201", "Fixture 301", "Fixture 401",
-    "Fixture 501", "Fixture 601", "Fixture 702", "Fixture 801"
+    "Fixture 101", "Fixture 201", "Fixture 501", "Fixture 601", "Fixture 702", "Fixture 801"
 ]
 
 # All MiniPanels EXCEPT the two spotlights (502 and 202)
 ALL_MINIPANEL = [
-    "Fixture 102", "Fixture 302", "Fixture 402",
-    "Fixture 602", "Fixture 701", "Fixture 802"
+    "Fixture 102", "Fixture 602", "Fixture 701", "Fixture 802"
 ]
 
 # All Mistrals — all used for lightning
 ALL_MISTRAL = [
-    "Fixture 103", "Fixture 203", "Fixture 303", "Fixture 403",
-    "Fixture 503", "Fixture 603", "Fixture 703", "Fixture 803"
+    "Fixture 103", "Fixture 203", "Fixture 503", "Fixture 603", "Fixture 703", "Fixture 803"
 ]
 
 ALL_MAGICBLADE = [
-    "Fixture 104", "Fixture 204", "Fixture 304", "Fixture 404",
-    "Fixture 504", "Fixture 604", "Fixture 704", "Fixture 804"
+    "Fixture 104", "Fixture 204", "Fixture 504", "Fixture 604", "Fixture 704", "Fixture 804"
 ]
 
 ALL_FIXTURES = ALL_EPAR + ALL_MINIPANEL + ["Fixture 202", "Fixture 502"] + ALL_MISTRAL + ALL_MAGICBLADE
