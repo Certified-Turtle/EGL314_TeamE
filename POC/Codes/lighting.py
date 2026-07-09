@@ -5,8 +5,12 @@
 # Fixture groups:
 #   ePar 180:    101, 201, 301, 401, 501, 601, 702, 801
 #   MiniPanel:   102, 202, 302, 402, 502, 602, 701, 802
-#   Mistral:     103, 203, 303, 403, 503, 603, 703, 803  ← lightning flash
-#   MagicBlade:  104, 204, 304, 404, 504, 604, 704, 804  ← spotlight (504) + effects
+#   Mistral:     103, 203, 303, 403, 503, 603, 703, 803  ← lightning flash, colour only
+#   MagicBlade:  104, 204, 304, 404, 504, 604, 704, 804  ← effects, colour only
+#
+# Spotlights (pan/tilt hardcoded, always on):
+#   Mistral 503 — pan -71.26, tilt -27.53, 100% white
+#   Mistral 203 — pan -140.56, tilt -11.78, 100% white
 
 import pygame
 from pythonosc import udp_client
@@ -37,38 +41,44 @@ ALL_MAGICBLADE = [
     "Fixture 104", "Fixture 204", "Fixture 304", "Fixture 404",
     "Fixture 504", "Fixture 604", "Fixture 704", "Fixture 804"
 ]
+ALL_FIXTURES = ALL_EPAR + ALL_MINIPANEL + ALL_MISTRAL + ALL_MAGICBLADE
 
-# Spotlight — MagicBlade 504, white, stays on always
-SPOTLIGHT_FIXTURE = "Fixture 504"
-SPOTLIGHT_PAN     = 0       # ← EDIT: pan degrees for your stage position
-SPOTLIGHT_TILT    = 0       # ← EDIT: tilt degrees for your stage position
-SPOTLIGHT_DIMMER  = 80
+# Spotlights — Mistral 503 and 203, white, pan/tilt hardcoded, always on
+SPOTLIGHT_A          = "Fixture 503"
+SPOTLIGHT_A_PAN      = -71.26
+SPOTLIGHT_A_TILT     = -27.53
 
-# Lightning uses all Mistrals
-FLASH_FIXTURES    = ALL_MISTRAL
+SPOTLIGHT_B          = "Fixture 203"
+SPOTLIGHT_B_PAN      = -140.56
+SPOTLIGHT_B_TILT     = -11.78
+
+SPOTLIGHT_DIMMER     = 100
+
+# Lightning — all Mistrals EXCEPT the two spotlights
+FLASH_FIXTURES = [
+    "Fixture 103", "Fixture 303",
+    "Fixture 403", "Fixture 603",
+    "Fixture 703", "Fixture 803"
+]
 FLASH_DIMMER      = 100
 FLASH_DURATION_MS = 150
 
-# Decoy hit
+# Decoy hit flash duration
 DECOY_FLASH_DURATION_MS = 350
 
-# Win pulse (stage clear only — not used for final win)
+# Stage win pulse
 STAGE_WIN_PULSE_COUNT = 4
 STAGE_WIN_PULSE_MS    = 200
 
-# Lose pulse (stage clear only)
+# Stage lose pulse interval
 STAGE_LOSE_PULSE_MS = 500
 
-# Countdown flash (1 per second sync)
+# Countdown flash per second duration
 COUNTDOWN_FLASH_DURATION_MS = 120
 
-# Pan/Tilt ranges
+# Pan/Tilt ranges (for spotlights only)
 PAN_MIN,  PAN_MAX  = -315, 315
 TILT_MIN, TILT_MAX = -135, 135
-
-# Zoom/Focus ranges
-ZOOM_MIN,  ZOOM_MAX  = 0, 100
-FOCUS_MIN, FOCUS_MAX = 0, 100
 
 # Colour ranges
 RED_MIN,   RED_MAX   = 0, 255
@@ -86,27 +96,24 @@ _decoy_flash_active      = False
 _decoy_flash_trigger_ms  = 0
 _in_countdown            = False
 
-# Stage win pulse
 _stage_win_active        = False
 _stage_win_step          = 0
 _stage_win_last_ms       = 0
 _stage_win_on            = False
 
-# Stage lose pulse
 _stage_lose_active       = False
 _stage_lose_on           = False
 _stage_lose_last_ms      = 0
 
-# Final win/lose pulse
 _final_win_active        = False
 _final_win_step          = 0
 _final_win_last_ms       = 0
 _final_win_on            = False
+
 _final_lose_active       = False
 _final_lose_on           = False
 _final_lose_last_ms      = 0
 
-# Countdown per-second flash
 _countdown_flash_active  = False
 _countdown_flash_ms      = 0
 _last_countdown_second   = -1
@@ -151,23 +158,49 @@ def _set_group_colour(fixtures: list, r: int, g: int, b: int, dimmer: int):
         _set_dimmer(fix, dimmer)
 
 
-def _set_mistral_pan_tilt(fixture: str, pan: float, tilt: float):
-    _set_attribute(fixture, "pan",  pan,  PAN_MIN,  PAN_MAX)
-    _set_attribute(fixture, "tilt", tilt, TILT_MIN, TILT_MAX)
+def _all_lights_off():
+    """Turn off every single fixture — used on game close and full reset."""
+    for fix in ALL_FIXTURES:
+        _send(f"{fix} At 0")
+    print("[LIGHTING] All lights off.")
 
 
-def _set_all_mistrals_position(pan: float, tilt: float):
-    for fix in ALL_MISTRAL:
-        _set_mistral_pan_tilt(fix, pan, tilt)
+def _fire_spotlights():
+    """
+    Bring up both Mistral spotlights at their hardcoded pan/tilt positions.
+    White, 100% brightness. These are the ONLY fixtures with pan/tilt set by Python.
+    """
+    # Spotlight A — Fixture 503
+    _set_colour(SPOTLIGHT_A, 255, 255, 255)
+    _set_dimmer(SPOTLIGHT_A, SPOTLIGHT_DIMMER)
+    _set_attribute(SPOTLIGHT_A, "pan",  SPOTLIGHT_A_PAN,  PAN_MIN, PAN_MAX)
+    _set_attribute(SPOTLIGHT_A, "tilt", SPOTLIGHT_A_TILT, TILT_MIN, TILT_MAX)
+
+    # Spotlight B — Fixture 203
+    _set_colour(SPOTLIGHT_B, 255, 255, 255)
+    _set_dimmer(SPOTLIGHT_B, SPOTLIGHT_DIMMER)
+    _set_attribute(SPOTLIGHT_B, "pan",  SPOTLIGHT_B_PAN,  PAN_MIN, PAN_MAX)
+    _set_attribute(SPOTLIGHT_B, "tilt", SPOTLIGHT_B_TILT, TILT_MIN, TILT_MAX)
+
+    print(f"[LIGHTING] Spotlights ON — {SPOTLIGHT_A} and {SPOTLIGHT_B} white 100%")
 
 
-def _fire_spotlight():
-    """White spotlight on MagicBlade 504 — stays on always."""
-    _set_colour(SPOTLIGHT_FIXTURE, 255, 255, 255)
-    _set_dimmer(SPOTLIGHT_FIXTURE, SPOTLIGHT_DIMMER)
-    _set_attribute(SPOTLIGHT_FIXTURE, "pan",  SPOTLIGHT_PAN,  PAN_MIN, PAN_MAX)
-    _set_attribute(SPOTLIGHT_FIXTURE, "tilt", SPOTLIGHT_TILT, TILT_MIN, TILT_MAX)
-    print(f"[LIGHTING] Spotlight ON — {SPOTLIGHT_FIXTURE} white at {SPOTLIGHT_DIMMER}%")
+def _stop_all_effects():
+    """Clear all running win/lose/pulse effects and their state."""
+    global _stage_win_active, _stage_lose_active
+    global _final_win_active, _final_lose_active
+    global _decoy_flash_active, _countdown_triggered
+    global _in_countdown, _countdown_flash_active, _last_countdown_second
+
+    _stage_win_active       = False
+    _stage_lose_active      = False
+    _final_win_active       = False
+    _final_lose_active      = False
+    _decoy_flash_active     = False
+    _countdown_triggered    = False
+    _in_countdown           = False
+    _countdown_flash_active = False
+    _last_countdown_second  = -1
 
 
 # =================================================================
@@ -175,95 +208,69 @@ def _fire_spotlight():
 # =================================================================
 def _setup_spooky():
     """
-    Dimmed spooky atmosphere across all fixtures.
-    Colours are muted and dark — not festive, just eerie.
+    Dimmed spooky atmosphere. No pan/tilt set — GMA3 controls Mistral positions.
 
-    ePar:       dark charcoal blue-grey, very low dimmer
-    MiniPanel:  deep olive/forest green, very dim
-    Mistral:    cold steel blue, spread wide, low
-    MagicBlade: dark rust/maroon (except 504 spotlight stays white)
+    ePar:       dark charcoal blue-grey, very low
+    MiniPanel:  deep olive green, very dim
+    Mistral:    cold steel blue, low (spotlights 503 and 203 excluded — handled separately)
+    MagicBlade: dark rust/maroon, low
     """
-    # ePar — dark charcoal blue-grey, very dim
     for fix in ALL_EPAR:
-        _set_colour(fix, 30, 30, 60)
-        _set_dimmer(fix, 25)
+        _set_colour(fix, 30, 30, 60);   _set_dimmer(fix, 25)
 
-    # MiniPanel — deep olive green, very dim
     for fix in ALL_MINIPANEL:
-        _set_colour(fix, 20, 45, 20)
-        _set_dimmer(fix, 20)
+        _set_colour(fix, 20, 45, 20);   _set_dimmer(fix, 20)
 
-    # Mistral — cold steel blue, spread wide, low intensity
-    left_mistrals  = ["Fixture 103", "Fixture 303", "Fixture 503", "Fixture 703"]
-    right_mistrals = ["Fixture 203", "Fixture 403", "Fixture 603", "Fixture 803"]
-    for fix in left_mistrals:
-        _set_colour(fix, 20, 30, 80)
-        _set_dimmer(fix, 30)
-        _set_mistral_pan_tilt(fix, -60, 40)
-    for fix in right_mistrals:
-        _set_colour(fix, 20, 30, 80)
-        _set_dimmer(fix, 30)
-        _set_mistral_pan_tilt(fix, 60, 40)
+    # Mistrals — colour only, no pan/tilt. Skip spotlights.
+    for fix in ALL_MISTRAL:
+        if fix in [SPOTLIGHT_A, SPOTLIGHT_B]:
+            continue
+        _set_colour(fix, 20, 30, 80);   _set_dimmer(fix, 30)
 
-    # MagicBlade — dark rust/maroon except spotlight 504
     for fix in ALL_MAGICBLADE:
-        if fix == SPOTLIGHT_FIXTURE:
-            continue    # Leave spotlight alone
-        _set_colour(fix, 60, 10, 10)
-        _set_dimmer(fix, 20)
+        _set_colour(fix, 60, 10, 10);   _set_dimmer(fix, 20)
 
-    print("[LIGHTING] Spooky atmosphere — dimmed and eerie.")
+    print("[LIGHTING] Spooky atmosphere set.")
 
 
 def _setup_countdown():
     """
-    Last 10 seconds — deep blood red, Mistrals face players.
-    Still dark, not bright — tension not celebration.
+    Last 10 seconds — deep blood red. No pan/tilt. Spotlights stay white.
     """
     for fix in ALL_EPAR:
-        _set_colour(fix, 80, 0, 0)
-        _set_dimmer(fix, 40)
+        _set_colour(fix, 80, 0, 0);     _set_dimmer(fix, 40)
 
     for fix in ALL_MINIPANEL:
-        _set_colour(fix, 60, 0, 0)
-        _set_dimmer(fix, 35)
+        _set_colour(fix, 60, 0, 0);     _set_dimmer(fix, 35)
 
     for fix in ALL_MISTRAL:
-        _set_colour(fix, 120, 0, 0)
-        _set_dimmer(fix, 50)
-    _set_all_mistrals_position(0, 10)   # Face players slightly down
+        if fix in [SPOTLIGHT_A, SPOTLIGHT_B]:
+            continue
+        _set_colour(fix, 120, 0, 0);    _set_dimmer(fix, 50)
 
     for fix in ALL_MAGICBLADE:
-        if fix == SPOTLIGHT_FIXTURE:
-            continue
-        _set_colour(fix, 100, 0, 0)
-        _set_dimmer(fix, 35)
+        _set_colour(fix, 100, 0, 0);    _set_dimmer(fix, 35)
 
-    print("[LIGHTING] Countdown atmosphere — blood red tension.")
+    print("[LIGHTING] Countdown atmosphere — blood red.")
 
 
 def _setup_thumbsup():
     """
-    Calm cool white for gesture reading. Slightly brighter so players can see.
+    Calm cool white for gesture reading. No pan/tilt. Spotlights stay white.
     """
     for fix in ALL_EPAR:
-        _set_colour(fix, 100, 100, 140)
-        _set_dimmer(fix, 45)
+        _set_colour(fix, 100, 100, 140); _set_dimmer(fix, 45)
 
     for fix in ALL_MINIPANEL:
-        _set_colour(fix, 80, 80, 120)
-        _set_dimmer(fix, 40)
+        _set_colour(fix, 80, 80, 120);   _set_dimmer(fix, 40)
 
     for fix in ALL_MISTRAL:
-        _set_colour(fix, 160, 160, 200)
-        _set_dimmer(fix, 40)
-    _set_all_mistrals_position(0, 20)
+        if fix in [SPOTLIGHT_A, SPOTLIGHT_B]:
+            continue
+        _set_colour(fix, 160, 160, 200); _set_dimmer(fix, 40)
 
     for fix in ALL_MAGICBLADE:
-        if fix == SPOTLIGHT_FIXTURE:
-            continue
-        _set_colour(fix, 80, 80, 120)
-        _set_dimmer(fix, 30)
+        _set_colour(fix, 80, 80, 120);   _set_dimmer(fix, 30)
 
     print("[LIGHTING] Thumbs up atmosphere — cool white/blue.")
 
@@ -272,41 +279,29 @@ def _setup_thumbsup():
 # === PUBLIC API ===
 # =================================================================
 def init():
-    """Call ONCE at game startup. Sets spooky atmosphere + spotlight."""
-    global _lightning_enabled, _countdown_triggered, _flash_active
-    global _decoy_flash_active, _in_countdown
-    global _stage_win_active, _stage_lose_active
-    global _final_win_active, _final_lose_active
-    global _countdown_flash_active, _last_countdown_second
+    """Call ONCE at game startup. Sets spooky atmosphere and fires spotlights."""
+    global _lightning_enabled, _flash_active
 
-    _lightning_enabled      = False
-    _countdown_triggered    = False
-    _flash_active           = False
-    _decoy_flash_active     = False
-    _in_countdown           = False
-    _stage_win_active       = False
-    _stage_lose_active      = False
-    _final_win_active       = False
-    _final_lose_active      = False
-    _countdown_flash_active = False
-    _last_countdown_second  = -1
+    _lightning_enabled = False
+    _flash_active      = False
+    _stop_all_effects()
 
     _setup_spooky()
-    _fire_spotlight()
+    _fire_spotlights()
     print("[LIGHTING] Initialised.")
 
 
 def on_tutorial_start():
-    """Call when start button pressed. Enables lightning."""
-    global _lightning_enabled, _countdown_triggered, _in_countdown
-    global _last_countdown_second
+    """Call when tutorial begins or a new stage starts. Enables lightning."""
+    global _lightning_enabled
 
-    _lightning_enabled     = True
-    _countdown_triggered   = False
-    _in_countdown          = False
-    _last_countdown_second = -1
+    _lightning_enabled = True
+    _stop_all_effects()
 
-    print("[LIGHTING] Tutorial started — lightning enabled.")
+    # Restore spooky in case win/lose colours are still showing
+    _setup_spooky()
+    _fire_spotlights()
+    print("[LIGHTING] Tutorial/stage started — lightning enabled.")
 
 
 def on_thumbsup_check():
@@ -317,6 +312,8 @@ def on_thumbsup_check():
     _flash_active      = False
 
     _setup_thumbsup()
+
+    # Cut all flash fixtures
     for fix in FLASH_FIXTURES:
         _set_dimmer(fix, 0)
 
@@ -325,23 +322,20 @@ def on_thumbsup_check():
 
 def on_thumbsup_accepted():
     """Call when thumbs up registered. Restore spooky, lightning on."""
-    global _lightning_enabled, _countdown_triggered, _in_countdown
-    global _last_countdown_second
+    global _lightning_enabled
 
-    _lightning_enabled     = True
-    _countdown_triggered   = False
-    _in_countdown          = False
-    _last_countdown_second = -1
+    _lightning_enabled = True
+    _stop_all_effects()
 
     _setup_spooky()
-    _fire_spotlight()
-    print("[LIGHTING] Thumbs up accepted.")
+    _fire_spotlights()
+    print("[LIGHTING] Thumbs up accepted — spooky restored, lightning on.")
 
 
 def on_lightning_flash():
     """
     Call when in-game lightning activates.
-    All Mistrals snap white. update() cuts after FLASH_DURATION_MS.
+    Non-spotlight Mistrals snap white. update() cuts after FLASH_DURATION_MS.
     """
     global _flash_active, _flash_trigger_ms
 
@@ -356,16 +350,14 @@ def on_lightning_flash():
     for fix in FLASH_FIXTURES:
         _set_colour(fix, 255, 255, 255)
         _set_dimmer(fix, FLASH_DIMMER)
-        _set_attribute(fix, "Zoom",  100, ZOOM_MIN,  ZOOM_MAX)
-        _set_attribute(fix, "Focus", 100, FOCUS_MIN, FOCUS_MAX)
 
-    print(f"[LIGHTING] ⚡ Lightning ON!")
+    print("[LIGHTING] ⚡ Lightning ON!")
 
 
 def on_decoy_hit():
     """
     Call when player hits a decoy.
-    Full room deep red slam. Mistrals face players.
+    Full room deep red slam. No pan/tilt changes. Spotlights stay.
     update() restores after DECOY_FLASH_DURATION_MS.
     """
     global _decoy_flash_active, _decoy_flash_trigger_ms
@@ -377,16 +369,15 @@ def on_decoy_hit():
     _decoy_flash_trigger_ms = pygame.time.get_ticks()
 
     for fix in ALL_EPAR:
-        _set_colour(fix, 180, 0, 0);  _set_dimmer(fix, 70)
+        _set_colour(fix, 180, 0, 0);    _set_dimmer(fix, 70)
     for fix in ALL_MINIPANEL:
-        _set_colour(fix, 160, 0, 0);  _set_dimmer(fix, 65)
+        _set_colour(fix, 160, 0, 0);    _set_dimmer(fix, 65)
     for fix in ALL_MISTRAL:
-        _set_colour(fix, 200, 0, 0);  _set_dimmer(fix, 75)
-    _set_all_mistrals_position(0, 0)
-    for fix in ALL_MAGICBLADE:
-        if fix == SPOTLIGHT_FIXTURE:
+        if fix in [SPOTLIGHT_A, SPOTLIGHT_B]:
             continue
-        _set_colour(fix, 180, 0, 0);  _set_dimmer(fix, 60)
+        _set_colour(fix, 200, 0, 0);    _set_dimmer(fix, 75)
+    for fix in ALL_MAGICBLADE:
+        _set_colour(fix, 180, 0, 0);    _set_dimmer(fix, 60)
 
     print("[LIGHTING] 🎃 DECOY HIT — red slam!")
 
@@ -394,77 +385,59 @@ def on_decoy_hit():
 def on_countdown(time_left: int):
     """
     Call every frame during gameplay, passing time_left.
-    Handles:
-      - Initial shift to red atmosphere at 10 seconds
-      - Per-second flash sync at 10, 9, 8, 7, 6, 5, 4, 3, 2, 1
+    Handles initial red shift at 10s and per-second flash sync.
     """
     global _countdown_triggered, _in_countdown
     global _countdown_flash_active, _countdown_flash_ms, _last_countdown_second
 
-    # First time hitting 10 seconds — shift atmosphere
     if not _countdown_triggered and time_left <= 10:
         _countdown_triggered = True
         _in_countdown        = True
         _setup_countdown()
-        print("[LIGHTING] ⏱ Countdown started — blood red!")
+        print("[LIGHTING] ⏱ Countdown — blood red!")
 
-    # Flash sync — fire once per second for 10 down to 1
     if _in_countdown and 1 <= time_left <= 10:
         if time_left != _last_countdown_second:
             _last_countdown_second  = time_left
             _countdown_flash_active = True
             _countdown_flash_ms     = pygame.time.get_ticks()
 
-            # All ePars and MiniPanels snap bright red for the flash
             for fix in ALL_EPAR:
-                _set_colour(fix, 200, 0, 0);  _set_dimmer(fix, 80)
+                _set_colour(fix, 200, 0, 0);    _set_dimmer(fix, 80)
             for fix in ALL_MINIPANEL:
-                _set_colour(fix, 180, 0, 0);  _set_dimmer(fix, 70)
+                _set_colour(fix, 180, 0, 0);    _set_dimmer(fix, 70)
 
             print(f"[LIGHTING] ⚡ Countdown flash — {time_left}s!")
 
 
 def on_stage_win(stage: int):
     """
-    Call when a stage is cleared with a passing score (stages 1 and 2).
-    Dark gold wash — not festive, just a brief relief.
-    No ePars used. MiniPanel + MagicBlade only.
-    update() handles the pulse.
+    Call when stage 1 or 2 is cleared with passing score.
+    Dark gold pulse on MiniPanel + MagicBlade. No ePars. No pan/tilt.
     """
-    global _lightning_enabled, _flash_active, _decoy_flash_active
+    global _lightning_enabled, _flash_active
     global _stage_win_active, _stage_win_step, _stage_win_on, _stage_win_last_ms
-    global _stage_lose_active, _in_countdown, _countdown_triggered
-    global _last_countdown_second
 
-    _lightning_enabled     = False
-    _flash_active          = False
-    _decoy_flash_active    = False
-    _stage_lose_active     = False
-    _in_countdown          = False
-    _countdown_triggered   = False
-    _last_countdown_second = -1
+    _lightning_enabled = False
+    _flash_active      = False
+    _stop_all_effects()
 
     for fix in FLASH_FIXTURES:
         _set_dimmer(fix, 0)
 
-    # ePar — dim down to almost off
     for fix in ALL_EPAR:
-        _set_colour(fix, 20, 15, 0);  _set_dimmer(fix, 10)
+        _set_colour(fix, 20, 15, 0);    _set_dimmer(fix, 10)
 
-    # MiniPanel — dark gold
     for fix in ALL_MINIPANEL:
-        _set_colour(fix, 80, 60, 0);  _set_dimmer(fix, 35)
+        _set_colour(fix, 80, 60, 0);    _set_dimmer(fix, 35)
 
-    # Mistral — face players, dark amber
     for fix in ALL_MISTRAL:
-        _set_colour(fix, 60, 40, 0);  _set_dimmer(fix, 30)
-    _set_all_mistrals_position(0, 15)
-
-    # MagicBlade — dark gold pulse (handled in update)
-    for fix in ALL_MAGICBLADE:
-        if fix == SPOTLIGHT_FIXTURE:
+        if fix in [SPOTLIGHT_A, SPOTLIGHT_B]:
             continue
-        _set_colour(fix, 100, 70, 0);  _set_dimmer(fix, 40)
+        _set_colour(fix, 60, 40, 0);    _set_dimmer(fix, 30)
+
+    for fix in ALL_MAGICBLADE:
+        _set_colour(fix, 100, 70, 0);   _set_dimmer(fix, 40)
 
     _stage_win_active  = True
     _stage_win_step    = 0
@@ -476,37 +449,29 @@ def on_stage_win(stage: int):
 
 def on_stage_lose(stage: int):
     """
-    Call when a stage ends without hitting the target score (stages 1 and 2).
-    Stays dark red — heavier than decoy hit but not as doom as final lose.
-    update() handles slow pulse.
+    Call when stage 1 or 2 ends without passing score.
+    Dark red slow pulse on MagicBlade. No pan/tilt.
     """
-    global _lightning_enabled, _flash_active, _decoy_flash_active
+    global _lightning_enabled, _flash_active
     global _stage_lose_active, _stage_lose_on, _stage_lose_last_ms
-    global _stage_win_active, _in_countdown, _countdown_triggered
-    global _last_countdown_second
 
-    _lightning_enabled     = False
-    _flash_active          = False
-    _decoy_flash_active    = False
-    _stage_win_active      = False
-    _in_countdown          = False
-    _countdown_triggered   = False
-    _last_countdown_second = -1
+    _lightning_enabled = False
+    _flash_active      = False
+    _stop_all_effects()
 
     for fix in FLASH_FIXTURES:
         _set_dimmer(fix, 0)
 
     for fix in ALL_EPAR:
-        _set_colour(fix, 50, 0, 0);  _set_dimmer(fix, 20)
+        _set_colour(fix, 50, 0, 0);     _set_dimmer(fix, 20)
     for fix in ALL_MINIPANEL:
-        _set_colour(fix, 40, 0, 0);  _set_dimmer(fix, 18)
+        _set_colour(fix, 40, 0, 0);     _set_dimmer(fix, 18)
     for fix in ALL_MISTRAL:
-        _set_colour(fix, 60, 0, 0);  _set_dimmer(fix, 25)
-    _set_all_mistrals_position(0, -30)   # Tilt slightly down
-    for fix in ALL_MAGICBLADE:
-        if fix == SPOTLIGHT_FIXTURE:
+        if fix in [SPOTLIGHT_A, SPOTLIGHT_B]:
             continue
-        _set_colour(fix, 70, 0, 0);  _set_dimmer(fix, 22)
+        _set_colour(fix, 60, 0, 0);     _set_dimmer(fix, 25)
+    for fix in ALL_MAGICBLADE:
+        _set_colour(fix, 70, 0, 0);     _set_dimmer(fix, 22)
 
     _stage_lose_active  = True
     _stage_lose_on      = True
@@ -517,51 +482,32 @@ def on_stage_lose(stage: int):
 
 def on_win():
     """
-    Final game win (after stage 3).
-    MiniPanel + MagicBlade gold pulse. No ePars.
-    Mistrals fan out wide. Spotlight stays.
+    Final win (after stage 3).
+    Amber gold on MiniPanel + MagicBlade. No ePars. No pan/tilt. Spotlights stay.
     """
-    global _lightning_enabled, _flash_active, _decoy_flash_active
+    global _lightning_enabled, _flash_active
     global _final_win_active, _final_win_step, _final_win_on, _final_win_last_ms
-    global _final_lose_active, _stage_win_active, _stage_lose_active
-    global _in_countdown, _countdown_triggered, _last_countdown_second
 
-    _lightning_enabled     = False
-    _flash_active          = False
-    _decoy_flash_active    = False
-    _final_lose_active     = False
-    _stage_win_active      = False
-    _stage_lose_active     = False
-    _in_countdown          = False
-    _countdown_triggered   = False
-    _last_countdown_second = -1
+    _lightning_enabled = False
+    _flash_active      = False
+    _stop_all_effects()
 
     for fix in FLASH_FIXTURES:
         _set_dimmer(fix, 0)
 
-    # ePar — dim off completely
     for fix in ALL_EPAR:
         _set_dimmer(fix, 0)
 
-    # MiniPanel — deep amber/gold
     for fix in ALL_MINIPANEL:
-        _set_colour(fix, 120, 80, 0);  _set_dimmer(fix, 55)
+        _set_colour(fix, 120, 80, 0);   _set_dimmer(fix, 55)
 
-    # Mistral — fan out wide, warm amber
-    left_mistrals  = ["Fixture 103", "Fixture 303", "Fixture 503", "Fixture 703"]
-    right_mistrals = ["Fixture 203", "Fixture 403", "Fixture 603", "Fixture 803"]
-    for fix in left_mistrals:
-        _set_colour(fix, 100, 60, 0);  _set_dimmer(fix, 45)
-        _set_mistral_pan_tilt(fix, -90, 25)
-    for fix in right_mistrals:
-        _set_colour(fix, 100, 60, 0);  _set_dimmer(fix, 45)
-        _set_mistral_pan_tilt(fix, 90, 25)
-
-    # MagicBlade — gold pulse (handled in update), except spotlight
-    for fix in ALL_MAGICBLADE:
-        if fix == SPOTLIGHT_FIXTURE:
+    for fix in ALL_MISTRAL:
+        if fix in [SPOTLIGHT_A, SPOTLIGHT_B]:
             continue
-        _set_colour(fix, 140, 90, 0);  _set_dimmer(fix, 50)
+        _set_colour(fix, 100, 60, 0);   _set_dimmer(fix, 45)
+
+    for fix in ALL_MAGICBLADE:
+        _set_colour(fix, 140, 90, 0);   _set_dimmer(fix, 50)
 
     _final_win_active  = True
     _final_win_step    = 0
@@ -573,40 +519,29 @@ def on_win():
 
 def on_lose():
     """
-    Final game lose (after stage 3).
-    Full room doom. Everything goes very dark red.
-    Mistrals tilt to floor. MagicBlade heartbeat.
-    Spotlight stays on.
+    Final lose (after stage 3).
+    Very dark red everywhere. MagicBlade heartbeat. No pan/tilt. Spotlights stay.
     """
-    global _lightning_enabled, _flash_active, _decoy_flash_active
+    global _lightning_enabled, _flash_active
     global _final_lose_active, _final_lose_on, _final_lose_last_ms
-    global _final_win_active, _stage_win_active, _stage_lose_active
-    global _in_countdown, _countdown_triggered, _last_countdown_second
 
-    _lightning_enabled     = False
-    _flash_active          = False
-    _decoy_flash_active    = False
-    _final_win_active      = False
-    _stage_win_active      = False
-    _stage_lose_active     = False
-    _in_countdown          = False
-    _countdown_triggered   = False
-    _last_countdown_second = -1
+    _lightning_enabled = False
+    _flash_active      = False
+    _stop_all_effects()
 
     for fix in FLASH_FIXTURES:
         _set_dimmer(fix, 0)
 
     for fix in ALL_EPAR:
-        _set_colour(fix, 40, 0, 0);  _set_dimmer(fix, 15)
+        _set_colour(fix, 40, 0, 0);     _set_dimmer(fix, 15)
     for fix in ALL_MINIPANEL:
-        _set_colour(fix, 30, 0, 0);  _set_dimmer(fix, 12)
+        _set_colour(fix, 30, 0, 0);     _set_dimmer(fix, 12)
     for fix in ALL_MISTRAL:
-        _set_colour(fix, 50, 0, 0);  _set_dimmer(fix, 20)
-    _set_all_mistrals_position(0, -60)   # Tilt to floor
-    for fix in ALL_MAGICBLADE:
-        if fix == SPOTLIGHT_FIXTURE:
+        if fix in [SPOTLIGHT_A, SPOTLIGHT_B]:
             continue
-        _set_colour(fix, 60, 0, 0);  _set_dimmer(fix, 18)
+        _set_colour(fix, 50, 0, 0);     _set_dimmer(fix, 20)
+    for fix in ALL_MAGICBLADE:
+        _set_colour(fix, 60, 0, 0);     _set_dimmer(fix, 18)
 
     _final_lose_active  = True
     _final_lose_on      = True
@@ -616,31 +551,31 @@ def on_lose():
 
 
 def on_game_restart():
-    """Call on K_r restart. Resets everything, restores spooky + spotlight."""
-    global _lightning_enabled, _countdown_triggered, _flash_active
-    global _decoy_flash_active, _in_countdown
-    global _stage_win_active, _stage_lose_active
-    global _final_win_active, _final_lose_active
-    global _countdown_flash_active, _last_countdown_second
+    """
+    Call on K_r restart.
+    Stops all effects, restores spooky atmosphere and spotlights.
+    """
+    global _lightning_enabled, _flash_active
 
-    _lightning_enabled      = False
-    _countdown_triggered    = False
-    _flash_active           = False
-    _decoy_flash_active     = False
-    _in_countdown           = False
-    _stage_win_active       = False
-    _stage_lose_active      = False
-    _final_win_active       = False
-    _final_lose_active      = False
-    _countdown_flash_active = False
-    _last_countdown_second  = -1
+    _lightning_enabled = False
+    _flash_active      = False
+    _stop_all_effects()
 
     for fix in FLASH_FIXTURES:
         _set_dimmer(fix, 0)
 
     _setup_spooky()
-    _fire_spotlight()
-    print("[LIGHTING] Restarted — spooky + spotlight restored.")
+    _fire_spotlights()
+    print("[LIGHTING] Restarted — spooky + spotlights restored.")
+
+
+def on_game_close():
+    """
+    Call when the game exits (pygame.quit / sys.exit).
+    Turns off every single fixture.
+    """
+    _all_lights_off()
+    print("[LIGHTING] Game closed — all lights off.")
 
 
 def update():
@@ -679,18 +614,17 @@ def update():
                 _setup_countdown()
             else:
                 _setup_spooky()
-            _fire_spotlight()
+            _fire_spotlights()
             _decoy_flash_active = False
             print("[LIGHTING] Decoy flash over.")
 
     # --- Countdown per-second flash cutoff ---
     if _countdown_flash_active:
         if now - _countdown_flash_ms > COUNTDOWN_FLASH_DURATION_MS:
-            # Snap back to countdown red base
             for fix in ALL_EPAR:
-                _set_colour(fix, 80, 0, 0);  _set_dimmer(fix, 40)
+                _set_colour(fix, 80, 0, 0);     _set_dimmer(fix, 40)
             for fix in ALL_MINIPANEL:
-                _set_colour(fix, 60, 0, 0);  _set_dimmer(fix, 35)
+                _set_colour(fix, 60, 0, 0);     _set_dimmer(fix, 35)
             _countdown_flash_active = False
 
     # --- Stage win dark gold pulse ---
@@ -699,28 +633,24 @@ def update():
             _stage_win_on = not _stage_win_on
             if _stage_win_on:
                 for fix in ALL_MINIPANEL:
-                    _set_colour(fix, 80, 60, 0);  _set_dimmer(fix, 35)
+                    _set_colour(fix, 80, 60, 0);    _set_dimmer(fix, 35)
                 for fix in ALL_MAGICBLADE:
-                    if fix == SPOTLIGHT_FIXTURE: continue
-                    _set_colour(fix, 100, 70, 0);  _set_dimmer(fix, 40)
+                    _set_colour(fix, 100, 70, 0);   _set_dimmer(fix, 40)
             else:
                 for fix in ALL_MINIPANEL:
-                    _set_colour(fix, 40, 30, 0);  _set_dimmer(fix, 15)
+                    _set_colour(fix, 40, 30, 0);    _set_dimmer(fix, 15)
                 for fix in ALL_MAGICBLADE:
-                    if fix == SPOTLIGHT_FIXTURE: continue
-                    _set_colour(fix, 50, 35, 0);  _set_dimmer(fix, 18)
+                    _set_colour(fix, 50, 35, 0);    _set_dimmer(fix, 18)
 
             _stage_win_step    += 1
             _stage_win_last_ms  = now
 
             if _stage_win_step >= STAGE_WIN_PULSE_COUNT * 2:
                 _stage_win_active = False
-                # Hold dim gold
                 for fix in ALL_MINIPANEL:
-                    _set_colour(fix, 60, 45, 0);  _set_dimmer(fix, 25)
+                    _set_colour(fix, 60, 45, 0);    _set_dimmer(fix, 25)
                 for fix in ALL_MAGICBLADE:
-                    if fix == SPOTLIGHT_FIXTURE: continue
-                    _set_colour(fix, 70, 50, 0);  _set_dimmer(fix, 28)
+                    _set_colour(fix, 70, 50, 0);    _set_dimmer(fix, 28)
                 print("[LIGHTING] Stage win pulse complete.")
 
     # --- Stage lose slow red pulse ---
@@ -729,8 +659,7 @@ def update():
             _stage_lose_on = not _stage_lose_on
             dimmer = 30 if _stage_lose_on else 10
             for fix in ALL_MAGICBLADE:
-                if fix == SPOTLIGHT_FIXTURE: continue
-                _set_colour(fix, 80, 0, 0);  _set_dimmer(fix, dimmer)
+                _set_colour(fix, 80, 0, 0);     _set_dimmer(fix, dimmer)
             _stage_lose_last_ms = now
 
     # --- Final win amber gold pulse ---
@@ -739,27 +668,24 @@ def update():
             _final_win_on = not _final_win_on
             if _final_win_on:
                 for fix in ALL_MINIPANEL:
-                    _set_colour(fix, 120, 80, 0);  _set_dimmer(fix, 55)
+                    _set_colour(fix, 120, 80, 0);   _set_dimmer(fix, 55)
                 for fix in ALL_MAGICBLADE:
-                    if fix == SPOTLIGHT_FIXTURE: continue
-                    _set_colour(fix, 140, 90, 0);  _set_dimmer(fix, 50)
+                    _set_colour(fix, 140, 90, 0);   _set_dimmer(fix, 50)
             else:
                 for fix in ALL_MINIPANEL:
-                    _set_colour(fix, 60, 40, 0);  _set_dimmer(fix, 25)
+                    _set_colour(fix, 60, 40, 0);    _set_dimmer(fix, 25)
                 for fix in ALL_MAGICBLADE:
-                    if fix == SPOTLIGHT_FIXTURE: continue
-                    _set_colour(fix, 70, 45, 0);  _set_dimmer(fix, 22)
+                    _set_colour(fix, 70, 45, 0);    _set_dimmer(fix, 22)
 
             _final_win_step    += 1
             _final_win_last_ms  = now
 
-            if _final_win_step >= 12:   # 6 full pulses then hold
+            if _final_win_step >= 12:
                 _final_win_active = False
                 for fix in ALL_MINIPANEL:
-                    _set_colour(fix, 100, 65, 0);  _set_dimmer(fix, 40)
+                    _set_colour(fix, 100, 65, 0);   _set_dimmer(fix, 40)
                 for fix in ALL_MAGICBLADE:
-                    if fix == SPOTLIGHT_FIXTURE: continue
-                    _set_colour(fix, 110, 70, 0);  _set_dimmer(fix, 38)
+                    _set_colour(fix, 110, 70, 0);   _set_dimmer(fix, 38)
                 print("[LIGHTING] Final win pulse complete — holding amber.")
 
     # --- Final lose heartbeat ---
@@ -768,8 +694,7 @@ def update():
             _final_lose_on = not _final_lose_on
             dimmer = 35 if _final_lose_on else 8
             for fix in ALL_MAGICBLADE:
-                if fix == SPOTLIGHT_FIXTURE: continue
-                _set_colour(fix, 70, 0, 0);  _set_dimmer(fix, dimmer)
+                _set_colour(fix, 70, 0, 0);     _set_dimmer(fix, dimmer)
             _final_lose_last_ms = now
 
 
@@ -785,7 +710,7 @@ if __name__ == "__main__":
     print(f"Sending to {GMA3_IP}:{GMA3_PORT}")
     print()
 
-    print("1. Init — spooky + spotlight...")
+    print("1. Init — spooky + spotlights...")
     init()
     time.sleep(3)
 
@@ -805,12 +730,12 @@ if __name__ == "__main__":
         if random.random() < 0.2:
             on_decoy_hit()
             time.sleep(DECOY_FLASH_DURATION_MS / 1000)
-            _setup_spooky(); _fire_spotlight()
+            _setup_spooky(); _fire_spotlights()
             _decoy_flash_active = False
         time.sleep(0.8)
 
     print()
-    print("3. Countdown — 10 to 1 flash per second...")
+    print("3. Countdown — 10 to 1...")
     for t in range(10, 0, -1):
         on_countdown(t)
         time.sleep(1)
@@ -821,26 +746,35 @@ if __name__ == "__main__":
     time.sleep(4)
 
     print()
-    print("5. Stage 2 LOSE...")
+    print("5. New round starts — effects should clear...")
+    on_tutorial_start()
+    time.sleep(2)
+
+    print()
+    print("6. Stage 2 LOSE...")
     on_stage_lose(2)
     time.sleep(4)
 
     print()
-    print("6. FINAL WIN...")
+    print("7. FINAL WIN...")
     on_win()
     time.sleep(6)
 
     print()
-    print("7. Restart...")
+    print("8. Restart...")
     on_game_restart()
     time.sleep(3)
 
     print()
-    print("8. FINAL LOSE...")
+    print("9. FINAL LOSE...")
     on_tutorial_start()
     time.sleep(1)
     on_lose()
-    time.sleep(6)
+    time.sleep(4)
+
+    print()
+    print("10. Game close — all lights off...")
+    on_game_close()
 
     print()
     print("=== TEST COMPLETE — delete test block when done ===")
