@@ -84,6 +84,36 @@ GREEN_MIN, GREEN_MAX = 0, 255
 BLUE_MIN,  BLUE_MAX  = 0, 255
 
 # =================================================================
+# === ROUND SEQUENCE (hardcoded chase + spotlight sweep) ===
+# One single sequence, reused for all 3 rounds. Runs continuously
+# during gameplay (started on_tutorial_start / on_thumbsup_accepted,
+# stopped on countdown / decoy-hit-safe / stage end / restart).
+# Mistrals are left untouched — they're reserved for lightning flashes.
+# =================================================================
+SEQUENCE_STEP_MS = 350  # how long each step holds before moving to the next
+
+# Each step = (epar_rgb+dim, minipanel_rgb+dim, magicblade_rgb+dim)
+ROUND_SEQUENCE = [
+    # step 0: ePar bright
+    {"epar": (40, 20, 90, 55), "minipanel": (10, 20, 10, 10), "magicblade": (40, 5, 5, 10)},
+    # step 1: MiniPanel bright
+    {"epar": (20, 15, 50, 15), "minipanel": (15, 60, 15, 55), "magicblade": (40, 5, 5, 10)},
+    # step 2: MagicBlade bright
+    {"epar": (20, 15, 50, 15), "minipanel": (10, 20, 10, 10), "magicblade": (90, 15, 15, 60)},
+    # step 3: all low (breath before repeating)
+    {"epar": (20, 15, 50, 15), "minipanel": (10, 20, 10, 10), "magicblade": (40, 5, 5, 10)},
+]
+
+# Spotlight sweep — cycles alongside the same step index, giving the
+# two spotlights a slow moving feel in sync with the colour chase.
+SPOTLIGHT_SWEEP = [
+    (SPOTLIGHT_A_PAN,      SPOTLIGHT_A_TILT,     SPOTLIGHT_B_PAN,      SPOTLIGHT_B_TILT),
+    (SPOTLIGHT_A_PAN + 15, SPOTLIGHT_A_TILT + 8,  SPOTLIGHT_B_PAN - 15, SPOTLIGHT_B_TILT - 8),
+    (SPOTLIGHT_A_PAN - 15, SPOTLIGHT_A_TILT - 8,  SPOTLIGHT_B_PAN + 15, SPOTLIGHT_B_TILT + 8),
+    (SPOTLIGHT_A_PAN,      SPOTLIGHT_A_TILT,     SPOTLIGHT_B_PAN,      SPOTLIGHT_B_TILT),
+]
+
+# =================================================================
 # === INTERNAL STATE ===
 # =================================================================
 _lightning_enabled       = False
@@ -115,6 +145,10 @@ _final_lose_last_ms      = 0
 _countdown_flash_active  = False
 _countdown_flash_ms      = 0
 _last_countdown_second   = -1
+
+_round_sequence_active   = False
+_round_sequence_step     = 0
+_round_sequence_last_ms  = 0
 
 
 # =================================================================
@@ -166,7 +200,8 @@ def _all_lights_off():
 def _fire_spotlights():
     """
     Bring up both MiniPanel spotlights at their hardcoded pan/tilt.
-    White, 100% brightness. ONLY these two fixtures have pan/tilt set by Python.
+    White, 100% brightness. ONLY these two fixtures have pan/tilt set by Python
+    (outside of the round sequence sweep, which reuses this same pair).
     """
     _set_colour(SPOTLIGHT_A, 255, 255, 255)
     _set_dimmer(SPOTLIGHT_A, SPOTLIGHT_DIMMER)
@@ -182,11 +217,12 @@ def _fire_spotlights():
 
 
 def _stop_all_effects():
-    """Clear all running win/lose/pulse effects and their state."""
+    """Clear all running win/lose/pulse/sequence effects and their state."""
     global _stage_win_active, _stage_lose_active
     global _final_win_active, _final_lose_active
     global _decoy_flash_active, _countdown_triggered
     global _in_countdown, _countdown_flash_active, _last_countdown_second
+    global _round_sequence_active
 
     _stage_win_active       = False
     _stage_lose_active      = False
@@ -197,6 +233,16 @@ def _stop_all_effects():
     _in_countdown           = False
     _countdown_flash_active = False
     _last_countdown_second  = -1
+    _round_sequence_active  = False
+
+
+def _start_round_sequence():
+    """Kick off the hardcoded chase/sweep sequence used during every round."""
+    global _round_sequence_active, _round_sequence_step, _round_sequence_last_ms
+    _round_sequence_active  = True
+    _round_sequence_step    = 0
+    _round_sequence_last_ms = pygame.time.get_ticks()
+    print("[LIGHTING] Round sequence started.")
 
 
 # =================================================================
@@ -278,7 +324,8 @@ def init():
 
 
 def on_tutorial_start():
-    """Call when tutorial begins or a new stage starts. Enables lightning, clears effects."""
+    """Call when tutorial begins or a new stage starts. Enables lightning,
+    clears effects, and kicks off the round chase/sweep sequence."""
     global _lightning_enabled
 
     _lightning_enabled = True
@@ -286,15 +333,17 @@ def on_tutorial_start():
 
     _setup_spooky()
     _fire_spotlights()
-    print("[LIGHTING] Tutorial/stage started — lightning enabled.")
+    _start_round_sequence()
+    print("[LIGHTING] Tutorial/stage started — lightning enabled, sequence running.")
 
 
 def on_thumbsup_check():
-    """Call when PHASE_INSTRUCT starts. Calm atmosphere, lightning off."""
-    global _lightning_enabled, _flash_active
+    """Call when PHASE_INSTRUCT starts. Calm atmosphere, lightning off, sequence paused."""
+    global _lightning_enabled, _flash_active, _round_sequence_active
 
-    _lightning_enabled = False
-    _flash_active      = False
+    _lightning_enabled    = False
+    _flash_active         = False
+    _round_sequence_active = False
 
     _setup_thumbsup()
 
@@ -305,7 +354,7 @@ def on_thumbsup_check():
 
 
 def on_thumbsup_accepted():
-    """Call when thumbs up registered. Restore spooky, lightning on."""
+    """Call when thumbs up registered. Restore spooky, lightning on, sequence resumes."""
     global _lightning_enabled
 
     _lightning_enabled = True
@@ -313,13 +362,15 @@ def on_thumbsup_accepted():
 
     _setup_spooky()
     _fire_spotlights()
-    print("[LIGHTING] Thumbs up accepted — spooky restored, lightning on.")
+    _start_round_sequence()
+    print("[LIGHTING] Thumbs up accepted — spooky restored, lightning + sequence on.")
 
 
 def on_lightning_flash():
     """
     Call when in-game lightning activates.
     ALL Mistrals snap white. update() cuts after FLASH_DURATION_MS.
+    (Untouched by the round sequence — Mistrals are reserved for this.)
     """
     global _flash_active, _flash_trigger_ms
 
@@ -342,7 +393,7 @@ def on_decoy_hit():
     """
     Call when player hits a decoy.
     Full room deep red. No pan/tilt. Spotlights stay white.
-    update() restores after DECOY_FLASH_DURATION_MS.
+    update() restores after DECOY_FLASH_DURATION_MS (sequence resumes on its own).
     """
     global _decoy_flash_active, _decoy_flash_trigger_ms
 
@@ -367,16 +418,19 @@ def on_decoy_hit():
 def on_countdown(time_left: int):
     """
     Call every frame during gameplay, passing time_left.
-    Handles initial red shift at 10s and per-second flash sync.
+    Handles initial red shift at 10s (stops the round sequence for a clean
+    blood-red look) and per-second flash sync.
     """
     global _countdown_triggered, _in_countdown
     global _countdown_flash_active, _countdown_flash_ms, _last_countdown_second
+    global _round_sequence_active
 
     if not _countdown_triggered and time_left <= 10:
-        _countdown_triggered = True
-        _in_countdown        = True
+        _countdown_triggered  = True
+        _in_countdown         = True
+        _round_sequence_active = False
         _setup_countdown()
-        print("[LIGHTING] ⏱ Countdown — blood red!")
+        print("[LIGHTING] ⏱ Countdown — blood red! (sequence paused)")
 
     if _in_countdown and 1 <= time_left <= 10:
         if time_left != _last_countdown_second:
@@ -395,7 +449,7 @@ def on_countdown(time_left: int):
 def on_stage_win(stage: int):
     """
     Call when stage 1 or 2 cleared with passing score.
-    Dark gold pulse on MiniPanel + MagicBlade. No ePars. No pan/tilt.
+    Bright gold pulse on MiniPanel + MagicBlade. No ePars. No pan/tilt.
     """
     global _lightning_enabled, _flash_active
     global _stage_win_active, _stage_win_step, _stage_win_on, _stage_win_last_ms
@@ -410,18 +464,18 @@ def on_stage_win(stage: int):
     for fix in ALL_EPAR:
         _set_colour(fix, 20, 15, 0);    _set_dimmer(fix, 10)
     for fix in ALL_MINIPANEL:
-        _set_colour(fix, 80, 60, 0);    _set_dimmer(fix, 35)
+        _set_colour(fix, 140, 110, 0);  _set_dimmer(fix, 65)
     for fix in ALL_MISTRAL:
         _set_colour(fix, 60, 40, 0);    _set_dimmer(fix, 30)
     for fix in ALL_MAGICBLADE:
-        _set_colour(fix, 100, 70, 0);   _set_dimmer(fix, 40)
+        _set_colour(fix, 160, 120, 0);  _set_dimmer(fix, 75)
 
     _stage_win_active  = True
     _stage_win_step    = 0
     _stage_win_on      = True
     _stage_win_last_ms = pygame.time.get_ticks()
 
-    print(f"[LIGHTING] Stage {stage} cleared — dark gold pulse.")
+    print(f"[LIGHTING] Stage {stage} cleared — bright gold pulse.")
 
 
 def on_stage_lose(stage: int):
@@ -440,13 +494,13 @@ def on_stage_lose(stage: int):
         _set_dimmer(fix, 0)
 
     for fix in ALL_EPAR:
-        _set_colour(fix, 50, 0, 0);     _set_dimmer(fix, 20)
+        _set_colour(fix, 70, 0, 0);     _set_dimmer(fix, 35)
     for fix in ALL_MINIPANEL:
-        _set_colour(fix, 40, 0, 0);     _set_dimmer(fix, 18)
+        _set_colour(fix, 60, 0, 0);     _set_dimmer(fix, 30)
     for fix in ALL_MISTRAL:
-        _set_colour(fix, 60, 0, 0);     _set_dimmer(fix, 25)
+        _set_colour(fix, 90, 0, 0);     _set_dimmer(fix, 40)
     for fix in ALL_MAGICBLADE:
-        _set_colour(fix, 70, 0, 0);     _set_dimmer(fix, 22)
+        _set_colour(fix, 100, 0, 0);    _set_dimmer(fix, 38)
 
     _stage_lose_active  = True
     _stage_lose_on      = True
@@ -458,7 +512,7 @@ def on_stage_lose(stage: int):
 def on_win():
     """
     Final win (after stage 3).
-    Amber gold on MiniPanel + MagicBlade. No ePars. No pan/tilt. Spotlights stay.
+    Bright amber gold on MiniPanel + MagicBlade. No ePars. No pan/tilt. Spotlights stay.
     """
     global _lightning_enabled, _flash_active
     global _final_win_active, _final_win_step, _final_win_on, _final_win_last_ms
@@ -473,24 +527,24 @@ def on_win():
     for fix in ALL_EPAR:
         _set_dimmer(fix, 0)
     for fix in ALL_MINIPANEL:
-        _set_colour(fix, 120, 80, 0);   _set_dimmer(fix, 55)
+        _set_colour(fix, 180, 120, 0);  _set_dimmer(fix, 85)
     for fix in ALL_MISTRAL:
-        _set_colour(fix, 100, 60, 0);   _set_dimmer(fix, 45)
+        _set_colour(fix, 150, 90, 0);   _set_dimmer(fix, 70)
     for fix in ALL_MAGICBLADE:
-        _set_colour(fix, 140, 90, 0);   _set_dimmer(fix, 50)
+        _set_colour(fix, 200, 130, 0);  _set_dimmer(fix, 85)
 
     _final_win_active  = True
     _final_win_step    = 0
     _final_win_on      = True
     _final_win_last_ms = pygame.time.get_ticks()
 
-    print("[LIGHTING] 🏆 FINAL WIN — amber gold pulse!")
+    print("[LIGHTING] 🏆 FINAL WIN — bright amber gold pulse!")
 
 
 def on_lose():
     """
     Final lose (after stage 3).
-    Very dark red everywhere. MagicBlade heartbeat. No pan/tilt. Spotlights stay.
+    Dark red everywhere, MagicBlade heartbeat. No pan/tilt. Spotlights stay.
     """
     global _lightning_enabled, _flash_active
     global _final_lose_active, _final_lose_on, _final_lose_last_ms
@@ -503,13 +557,13 @@ def on_lose():
         _set_dimmer(fix, 0)
 
     for fix in ALL_EPAR:
-        _set_colour(fix, 40, 0, 0);     _set_dimmer(fix, 15)
+        _set_colour(fix, 60, 0, 0);     _set_dimmer(fix, 28)
     for fix in ALL_MINIPANEL:
-        _set_colour(fix, 30, 0, 0);     _set_dimmer(fix, 12)
+        _set_colour(fix, 50, 0, 0);     _set_dimmer(fix, 22)
     for fix in ALL_MISTRAL:
-        _set_colour(fix, 50, 0, 0);     _set_dimmer(fix, 20)
+        _set_colour(fix, 80, 0, 0);     _set_dimmer(fix, 35)
     for fix in ALL_MAGICBLADE:
-        _set_colour(fix, 60, 0, 0);     _set_dimmer(fix, 18)
+        _set_colour(fix, 90, 0, 0);     _set_dimmer(fix, 32)
 
     _final_lose_active  = True
     _final_lose_on      = True
@@ -544,10 +598,11 @@ def update():
     """
     Call EVERY FRAME.
     Handles all timed effects:
+      - Round chase/sweep sequence
       - Lightning cutoff
       - Decoy hit restore
       - Countdown per-second flash cutoff
-      - Stage win dark gold pulse
+      - Stage win gold pulse
       - Stage lose slow red pulse
       - Final win amber gold pulse
       - Final lose heartbeat
@@ -558,8 +613,35 @@ def update():
     global _stage_lose_active, _stage_lose_on, _stage_lose_last_ms
     global _final_win_active, _final_win_step, _final_win_on, _final_win_last_ms
     global _final_lose_active, _final_lose_on, _final_lose_last_ms
+    global _round_sequence_active, _round_sequence_step, _round_sequence_last_ms
 
     now = pygame.time.get_ticks()
+
+    # --- Round chase/sweep sequence ---
+    if _round_sequence_active and not _decoy_flash_active:
+        if now - _round_sequence_last_ms >= SEQUENCE_STEP_MS:
+            _round_sequence_step   = (_round_sequence_step + 1) % len(ROUND_SEQUENCE)
+            _round_sequence_last_ms = now
+
+            step = ROUND_SEQUENCE[_round_sequence_step]
+
+            er, eg, eb, ed = step["epar"]
+            for fix in ALL_EPAR:
+                _set_colour(fix, er, eg, eb); _set_dimmer(fix, ed)
+
+            mr, mg, mb, md = step["minipanel"]
+            for fix in ALL_MINIPANEL:
+                _set_colour(fix, mr, mg, mb); _set_dimmer(fix, md)
+
+            gr, gg, gb, gd = step["magicblade"]
+            for fix in ALL_MAGICBLADE:
+                _set_colour(fix, gr, gg, gb); _set_dimmer(fix, gd)
+
+            a_pan, a_tilt, b_pan, b_tilt = SPOTLIGHT_SWEEP[_round_sequence_step]
+            _set_attribute(SPOTLIGHT_A, "pan",  a_pan,  PAN_MIN, PAN_MAX)
+            _set_attribute(SPOTLIGHT_A, "tilt", a_tilt, TILT_MIN, TILT_MAX)
+            _set_attribute(SPOTLIGHT_B, "pan",  b_pan,  PAN_MIN, PAN_MAX)
+            _set_attribute(SPOTLIGHT_B, "tilt", b_tilt, TILT_MIN, TILT_MAX)
 
     # --- Lightning cutoff ---
     if _flash_active:
@@ -589,20 +671,20 @@ def update():
                 _set_colour(fix, 60, 0, 0);     _set_dimmer(fix, 35)
             _countdown_flash_active = False
 
-    # --- Stage win dark gold pulse ---
+    # --- Stage win bright gold pulse ---
     if _stage_win_active:
         if now - _stage_win_last_ms >= STAGE_WIN_PULSE_MS:
             _stage_win_on = not _stage_win_on
             if _stage_win_on:
                 for fix in ALL_MINIPANEL:
-                    _set_colour(fix, 80, 60, 0);    _set_dimmer(fix, 35)
+                    _set_colour(fix, 140, 110, 0);  _set_dimmer(fix, 65)
                 for fix in ALL_MAGICBLADE:
-                    _set_colour(fix, 100, 70, 0);   _set_dimmer(fix, 40)
+                    _set_colour(fix, 160, 120, 0);  _set_dimmer(fix, 75)
             else:
                 for fix in ALL_MINIPANEL:
-                    _set_colour(fix, 40, 30, 0);    _set_dimmer(fix, 15)
+                    _set_colour(fix, 60, 45, 0);    _set_dimmer(fix, 25)
                 for fix in ALL_MAGICBLADE:
-                    _set_colour(fix, 50, 35, 0);    _set_dimmer(fix, 18)
+                    _set_colour(fix, 75, 50, 0);    _set_dimmer(fix, 28)
 
             _stage_win_step    += 1
             _stage_win_last_ms  = now
@@ -610,18 +692,18 @@ def update():
             if _stage_win_step >= STAGE_WIN_PULSE_COUNT * 2:
                 _stage_win_active = False
                 for fix in ALL_MINIPANEL:
-                    _set_colour(fix, 60, 45, 0);    _set_dimmer(fix, 25)
+                    _set_colour(fix, 90, 65, 0);    _set_dimmer(fix, 38)
                 for fix in ALL_MAGICBLADE:
-                    _set_colour(fix, 70, 50, 0);    _set_dimmer(fix, 28)
+                    _set_colour(fix, 100, 70, 0);   _set_dimmer(fix, 40)
                 print("[LIGHTING] Stage win pulse complete.")
 
     # --- Stage lose slow red pulse ---
     if _stage_lose_active:
         if now - _stage_lose_last_ms >= STAGE_LOSE_PULSE_MS:
             _stage_lose_on = not _stage_lose_on
-            dimmer = 30 if _stage_lose_on else 10
+            dimmer = 60 if _stage_lose_on else 15
             for fix in ALL_MAGICBLADE:
-                _set_colour(fix, 80, 0, 0);     _set_dimmer(fix, dimmer)
+                _set_colour(fix, 100, 0, 0);    _set_dimmer(fix, dimmer)
             _stage_lose_last_ms = now
 
     # --- Final win amber gold pulse ---
@@ -630,14 +712,14 @@ def update():
             _final_win_on = not _final_win_on
             if _final_win_on:
                 for fix in ALL_MINIPANEL:
-                    _set_colour(fix, 120, 80, 0);   _set_dimmer(fix, 55)
+                    _set_colour(fix, 180, 120, 0);  _set_dimmer(fix, 85)
                 for fix in ALL_MAGICBLADE:
-                    _set_colour(fix, 140, 90, 0);   _set_dimmer(fix, 50)
+                    _set_colour(fix, 200, 130, 0);  _set_dimmer(fix, 85)
             else:
                 for fix in ALL_MINIPANEL:
-                    _set_colour(fix, 60, 40, 0);    _set_dimmer(fix, 25)
+                    _set_colour(fix, 90, 60, 0);    _set_dimmer(fix, 40)
                 for fix in ALL_MAGICBLADE:
-                    _set_colour(fix, 70, 45, 0);    _set_dimmer(fix, 22)
+                    _set_colour(fix, 100, 65, 0);   _set_dimmer(fix, 38)
 
             _final_win_step    += 1
             _final_win_last_ms  = now
@@ -645,18 +727,18 @@ def update():
             if _final_win_step >= 12:
                 _final_win_active = False
                 for fix in ALL_MINIPANEL:
-                    _set_colour(fix, 100, 65, 0);   _set_dimmer(fix, 40)
+                    _set_colour(fix, 150, 100, 0);  _set_dimmer(fix, 65)
                 for fix in ALL_MAGICBLADE:
-                    _set_colour(fix, 110, 70, 0);   _set_dimmer(fix, 38)
+                    _set_colour(fix, 160, 105, 0);  _set_dimmer(fix, 65)
                 print("[LIGHTING] Final win pulse complete — holding amber.")
 
     # --- Final lose heartbeat ---
     if _final_lose_active:
         if now - _final_lose_last_ms >= 700:
             _final_lose_on = not _final_lose_on
-            dimmer = 35 if _final_lose_on else 8
+            dimmer = 60 if _final_lose_on else 15
             for fix in ALL_MAGICBLADE:
-                _set_colour(fix, 70, 0, 0);     _set_dimmer(fix, dimmer)
+                _set_colour(fix, 100, 0, 0);    _set_dimmer(fix, dimmer)
             _final_lose_last_ms = now
 
 
@@ -676,13 +758,14 @@ if __name__ == "__main__":
     init()
     time.sleep(3)
 
-    print("2. Tutorial start — lightning enabled...")
+    print("2. Tutorial start — lightning + round sequence enabled...")
     on_tutorial_start()
 
     start = time.time()
     while time.time() - start < 10:
         remaining = 30 - (time.time() - start)
         print(f"Time left: {remaining:.0f}s")
+        update()
         if random.random() < 0.4:
             on_lightning_flash()
             time.sleep(FLASH_DURATION_MS / 1000)
@@ -708,7 +791,7 @@ if __name__ == "__main__":
     time.sleep(4)
 
     print()
-    print("5. New round starts — effects clear, spooky restores...")
+    print("5. New round starts — effects clear, spooky + sequence restore...")
     on_tutorial_start()
     time.sleep(2)
 
