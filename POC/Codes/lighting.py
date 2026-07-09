@@ -84,11 +84,13 @@ GREEN_MIN, GREEN_MAX = 0, 255
 BLUE_MIN,  BLUE_MAX  = 0, 255
 
 # =================================================================
-# === ROUND SEQUENCE (hardcoded chase + spotlight sweep) ===
+# === ROUND SEQUENCE (hardcoded colour chase) ===
 # One single sequence, reused for all 3 rounds. Runs continuously
 # during gameplay (started on_tutorial_start / on_thumbsup_accepted,
 # stopped on countdown / decoy-hit-safe / stage end / restart).
 # Mistrals are left untouched — they're reserved for lightning flashes.
+# Spotlights (502 / 202) are NOT touched by this — they stay fixed at
+# their hardcoded pan/tilt the whole time, per _fire_spotlights().
 # =================================================================
 SEQUENCE_STEP_MS = 350  # how long each step holds before moving to the next
 
@@ -102,15 +104,6 @@ ROUND_SEQUENCE = [
     {"epar": (20, 15, 50, 15), "minipanel": (10, 20, 10, 10), "magicblade": (90, 15, 15, 60)},
     # step 3: all low (breath before repeating)
     {"epar": (20, 15, 50, 15), "minipanel": (10, 20, 10, 10), "magicblade": (40, 5, 5, 10)},
-]
-
-# Spotlight sweep — cycles alongside the same step index, giving the
-# two spotlights a slow moving feel in sync with the colour chase.
-SPOTLIGHT_SWEEP = [
-    (SPOTLIGHT_A_PAN,      SPOTLIGHT_A_TILT,     SPOTLIGHT_B_PAN,      SPOTLIGHT_B_TILT),
-    (SPOTLIGHT_A_PAN + 15, SPOTLIGHT_A_TILT + 8,  SPOTLIGHT_B_PAN - 15, SPOTLIGHT_B_TILT - 8),
-    (SPOTLIGHT_A_PAN - 15, SPOTLIGHT_A_TILT - 8,  SPOTLIGHT_B_PAN + 15, SPOTLIGHT_B_TILT + 8),
-    (SPOTLIGHT_A_PAN,      SPOTLIGHT_A_TILT,     SPOTLIGHT_B_PAN,      SPOTLIGHT_B_TILT),
 ]
 
 # =================================================================
@@ -636,12 +629,6 @@ def update():
             gr, gg, gb, gd = step["magicblade"]
             for fix in ALL_MAGICBLADE:
                 _set_colour(fix, gr, gg, gb); _set_dimmer(fix, gd)
-
-            a_pan, a_tilt, b_pan, b_tilt = SPOTLIGHT_SWEEP[_round_sequence_step]
-            _set_attribute(SPOTLIGHT_A, "pan",  a_pan,  PAN_MIN, PAN_MAX)
-            _set_attribute(SPOTLIGHT_A, "tilt", a_tilt, TILT_MIN, TILT_MAX)
-            _set_attribute(SPOTLIGHT_B, "pan",  b_pan,  PAN_MIN, PAN_MAX)
-            _set_attribute(SPOTLIGHT_B, "tilt", b_tilt, TILT_MIN, TILT_MAX)
 
     # --- Lightning cutoff ---
     if _flash_active:
