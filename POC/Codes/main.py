@@ -165,6 +165,7 @@ while True:
         # Check for window exit events even while loading to prevent OS "Not Responding" hangs
         for event in pygame.event.get():
             if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
+                lighting.on_game_close()             # ← LIGHTING: all lights off before exit
                 pygame.quit(); sys.exit()
         
         # Once 1 second passes, safely inject the camera stream
@@ -334,6 +335,7 @@ while True:
     # Pygame Native Event Loop Processing
     for event in pygame.event.get():
         if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
+            lighting.on_game_close()                 # ← LIGHTING: all lights off before exit
             pygame.quit(); sys.exit()
             
         # === TOGGLE DETECTOR ===
@@ -358,7 +360,9 @@ while True:
                     print("[UI] Multiplayer mode selected — P2 purple tracking active.")
         
         if game_phase == PHASE_GAMEOVER and event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_q: pygame.quit(); sys.exit()
+            if event.key == pygame.K_q:
+                lighting.on_game_close()             # ← LIGHTING: all lights off before exit
+                pygame.quit(); sys.exit()
             if event.key == pygame.K_r: 
                 score, time_left, start_ticks, current_hole, _ = restart_quit.reset_game()
                 tutorial_count = 0; mp_tutorial_count = 0; game_phase = PHASE_INTRO; death_sequences = []
