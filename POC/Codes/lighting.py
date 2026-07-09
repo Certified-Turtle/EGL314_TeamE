@@ -206,7 +206,11 @@ def _fire_spotlights():
     _set_attribute(SPOTLIGHT_B, "pan",  SPOTLIGHT_B_PAN,  PAN_MIN, PAN_MAX)
     _set_attribute(SPOTLIGHT_B, "tilt", SPOTLIGHT_B_TILT, TILT_MIN, TILT_MAX)
 
-    print(f"[LIGHTING] Spotlights ON — {SPOTLIGHT_A} and {SPOTLIGHT_B} white 100%")
+    # Fixture 601 turns on/color-cycles alongside the spotlights (console-side
+    # effect, not driven by this script) — force it off every time spotlights fire.
+    _set_dimmer("Fixture 601", 0)
+
+    print(f"[LIGHTING] Spotlights ON — {SPOTLIGHT_A} and {SPOTLIGHT_B} white 100%, Fixture 601 forced off")
 
 
 def _stop_all_effects():
