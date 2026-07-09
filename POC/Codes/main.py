@@ -15,6 +15,7 @@ import restart_quit
 import addons 
 import config
 from pythonosc import udp_client
+import lighting
 
 # =================================================================
 # === 1. CONFIGURATION STAGE & PERFORMANCE CANVAS RESCALING ===
@@ -91,8 +92,7 @@ death_sequences = []
 AUDIO_LAPTOP_IP = "192.168.254.12" 
 audio_sender = udp_client.SimpleUDPClient(AUDIO_LAPTOP_IP, 9000) #Edit IP and port as needed
 
-LIGHTING_LAPTOP_IP = "192.168.254.252"
-lighting_sender = udp_client.SimpleUDPClient(LIGHTING_LAPTOP_IP, 9001) #Edit IP and port as needed
+# LIGHTING_LAPTOP_IP and lighting_sender removed — lighting.py manages its own connection
 
 total_ghosts_spawned = 0
 total_decoys_spawned = 0
@@ -172,6 +172,7 @@ while True:
             cap = opencv.init_camera()
             reference_ok_sign = opencv.load_relational_gesture_csv("thumbsup.csv")
             camera_fully_initialized = True
+            lighting.init()                          # ← LIGHTING: spooky atmosphere + spotlight on load
             last_move_time = pygame.time.get_ticks()
         
         clock.tick(60)
@@ -185,6 +186,7 @@ while True:
             lightning_active = True
             lightning_trigger_time = now
             lightning_duration = random.randint(80, 220)
+            lighting.on_lightning_flash()            # ← LIGHTING: all Mistrals snap white
 
     # Scenery routing mapping
     is_tutorial_scene = game_phase in [PHASE_TUTORIAL, PHASE_TUTORIAL_MP, PHASE_INSTRUCT, PHASE_PREPARE]
@@ -379,6 +381,9 @@ while True:
                 last_frame_pos_p2 = pygame.math.Vector2(WIDTH // 2, HEIGHT // 2)
                 mp_tracking_locked = False
                 mp_ghost_timer_debt = 0
+                lighting.on_game_restart()           # ← LIGHTING: restore spooky + spotlight
+
+    lighting.update()                                # ← LIGHTING: handles all timed effects every frame
 
     # Phase State Machine Routing Engine
     thumbs_up_active = False
@@ -405,9 +410,11 @@ while True:
 
     elif game_phase == PHASE_TUTORIAL and tutorial_count >= 5:
         game_phase = PHASE_INSTRUCT
+        lighting.on_thumbsup_check()                 # ← LIGHTING: calm white/blue for gesture
 
     elif game_phase == PHASE_TUTORIAL_MP and mp_tutorial_count >= 10:
         game_phase = PHASE_INSTRUCT
+        lighting.on_thumbsup_check()                 # ← LIGHTING: same for multiplayer path
         
     elif game_phase == PHASE_INSTRUCT:
         # 1. Broad Level Pipeline Check
@@ -432,12 +439,14 @@ while True:
                 config.gesture_hold_progress = 0  
                 game_phase = PHASE_PREPARE
                 ready_timer = now
+                lighting.on_thumbsup_accepted()      # ← LIGHTING: restore spooky, lightning on
         else:
             config.gesture_hold_progress = max(0, config.gesture_hold_progress - 2)
 
     elif game_phase == PHASE_PREPARE and (now - ready_timer) > 5000:
         game_phase = PHASE_GAMEPLAY
         start_ticks = now
+        lighting.on_tutorial_start()                 # ← LIGHTING: enable lightning for gameplay
 
     elif game_phase == PHASE_STAGE_CLEAR:
         # Hover-to-continue button for stage clear screen
@@ -454,6 +463,7 @@ while True:
             stage_clear_hover = 0
             start_ticks = now
             game_phase = PHASE_GAMEPLAY
+            lighting.on_tutorial_start()             # ← LIGHTING: re-enable lightning for next stage
             print(f"[STAGE] Advancing to stage {current_stage}")
 
     # =================================================================
@@ -474,6 +484,10 @@ while True:
         if hit and game_phase == PHASE_TUTORIAL_MP:
             mp_tutorial_count += 1
 
+        # Decoy hit — full room red flash
+        if hit and active_entity_type == "DECOY" and game_phase == PHASE_GAMEPLAY:
+            lighting.on_decoy_hit()                  # ← LIGHTING: full room red slam
+
         # P2 hit check (purple object) — only if multiplayer on and P1 didn't already land a hit
         if multiplayer_mode and not hit:
             int_cursor_pos_p2 = [int(cursor_vector_p2.x), int(cursor_vector_p2.y)]
@@ -485,11 +499,17 @@ while True:
             # Increment combined MP tutorial counter if P2 landed a hit during MP training
             if p2_hit and game_phase == PHASE_TUTORIAL_MP:
                 mp_tutorial_count += 1
+
+            # P2 decoy hit
+            if p2_hit and active_entity_type == "DECOY" and game_phase == PHASE_GAMEPLAY:
+                lighting.on_decoy_hit()              # ← LIGHTING: same red flash for P2 decoy hit
         
         # 2. Match Timing & Stage Completion Check
         if game_phase == PHASE_GAMEPLAY:
             seconds_in_game = (now - start_ticks) // 1000
             time_left = max(0, STAGE_DURATION - seconds_in_game)
+
+            lighting.on_countdown(time_left)         # ← LIGHTING: handles 10s shift + per-second flash
 
             if time_left == 0:
                 # Stage time is up — check if target was met
@@ -497,9 +517,17 @@ while True:
                 if current_stage == 3:
                     # Final stage done — go to game over regardless
                     game_phase = PHASE_GAMEOVER
+                    if stage_passed:
+                        lighting.on_win()            # ← LIGHTING: final win amber gold
+                    else:
+                        lighting.on_lose()           # ← LIGHTING: final lose doom heartbeat
                 else:
                     game_phase = PHASE_STAGE_CLEAR
                     stage_clear_hover = 0
+                    if stage_passed:
+                        lighting.on_stage_win(current_stage)   # ← LIGHTING: stage win dark gold
+                    else:
+                        lighting.on_stage_lose(current_stage)  # ← LIGHTING: stage lose dark red
 
         # 3. Stage-Aware Move Interval & Positional Shifting
         # Stage 3 also enables decoys via the spawn pool
