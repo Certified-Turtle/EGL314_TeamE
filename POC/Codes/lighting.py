@@ -692,7 +692,7 @@ def update():
     if _stage_lose_active:
         if now - _stage_lose_last_ms >= STAGE_LOSE_PULSE_MS:
             _stage_lose_on = not _stage_lose_on
-            dimmer = 60 if _stage_lose_on else 15
+            dimmer = 100 if _stage_lose_on else 15
             for fix in ALL_MAGICBLADE:
                 _set_colour(fix, 100, 0, 0);    _set_dimmer(fix, dimmer)
             _stage_lose_last_ms = now
@@ -703,14 +703,14 @@ def update():
             _final_win_on = not _final_win_on
             if _final_win_on:
                 for fix in ALL_MINIPANEL:
-                    _set_colour(fix, 180, 120, 0);  _set_dimmer(fix, 85)
+                    _set_colour(fix, 180, 120, 0);  _set_dimmer(fix, 100)
                 for fix in ALL_MAGICBLADE:
-                    _set_colour(fix, 200, 130, 0);  _set_dimmer(fix, 85)
+                    _set_colour(fix, 200, 130, 0);  _set_dimmer(fix, 100)
             else:
                 for fix in ALL_MINIPANEL:
-                    _set_colour(fix, 90, 60, 0);    _set_dimmer(fix, 40)
+                    _set_colour(fix, 90, 60, 0);    _set_dimmer(fix, 100)
                 for fix in ALL_MAGICBLADE:
-                    _set_colour(fix, 100, 65, 0);   _set_dimmer(fix, 38)
+                    _set_colour(fix, 100, 65, 0);   _set_dimmer(fix, 100)
 
             _final_win_step    += 1
             _final_win_last_ms  = now
@@ -718,99 +718,99 @@ def update():
             if _final_win_step >= 12:
                 _final_win_active = False
                 for fix in ALL_MINIPANEL:
-                    _set_colour(fix, 150, 100, 0);  _set_dimmer(fix, 65)
+                    _set_colour(fix, 150, 100, 0);  _set_dimmer(fix, 100)
                 for fix in ALL_MAGICBLADE:
-                    _set_colour(fix, 160, 105, 0);  _set_dimmer(fix, 65)
+                    _set_colour(fix, 160, 105, 0);  _set_dimmer(fix, 100)
                 print("[LIGHTING] Final win pulse complete — holding amber.")
 
     # --- Final lose heartbeat ---
     if _final_lose_active:
         if now - _final_lose_last_ms >= 700:
             _final_lose_on = not _final_lose_on
-            dimmer = 60 if _final_lose_on else 15
+            dimmer = 100 if _final_lose_on else 50
             for fix in ALL_MAGICBLADE:
                 _set_colour(fix, 100, 0, 0);    _set_dimmer(fix, dimmer)
             _final_lose_last_ms = now
 
 
-# =================================================================
-# === TEST BLOCK — DELETE AFTER TESTING ===
-# =================================================================
-if __name__ == "__main__":
-    import time
-    import random
-    pygame.init()
+# # =================================================================
+# # === TEST BLOCK — DELETE AFTER TESTING ===
+# # =================================================================
+# if __name__ == "__main__":
+#     import time
+#     import random
+#     pygame.init()
 
-    print("=== FULL LIGHTING TEST ===")
-    print(f"Sending to {GMA3_IP}:{GMA3_PORT}")
-    print()
+#     print("=== FULL LIGHTING TEST ===")
+#     print(f"Sending to {GMA3_IP}:{GMA3_PORT}")
+#     print()
 
-    print("1. Init — spooky + spotlights (502 and 202)...")
-    init()
-    time.sleep(3)
+#     print("1. Init — spooky + spotlights (502 and 202)...")
+#     init()
+#     time.sleep(3)
 
-    print("2. Tutorial start — lightning + round sequence enabled...")
-    on_tutorial_start()
+#     print("2. Tutorial start — lightning + round sequence enabled...")
+#     on_tutorial_start()
 
-    start = time.time()
-    while time.time() - start < 10:
-        remaining = 30 - (time.time() - start)
-        print(f"Time left: {remaining:.0f}s")
-        update()
-        if random.random() < 0.4:
-            on_lightning_flash()
-            time.sleep(FLASH_DURATION_MS / 1000)
-            for fix in FLASH_FIXTURES:
-                _set_dimmer(fix, 0)
-            _flash_active = False
-        if random.random() < 0.2:
-            on_decoy_hit()
-            time.sleep(DECOY_FLASH_DURATION_MS / 1000)
-            _setup_spooky(); _fire_spotlights()
-            _decoy_flash_active = False
-        time.sleep(0.8)
+#     start = time.time()
+#     while time.time() - start < 10:
+#         remaining = 30 - (time.time() - start)
+#         print(f"Time left: {remaining:.0f}s")
+#         update()
+#         if random.random() < 0.4:
+#             on_lightning_flash()
+#             time.sleep(FLASH_DURATION_MS / 1000)
+#             for fix in FLASH_FIXTURES:
+#                 _set_dimmer(fix, 0)
+#             _flash_active = False
+#         if random.random() < 0.2:
+#             on_decoy_hit()
+#             time.sleep(DECOY_FLASH_DURATION_MS / 1000)
+#             _setup_spooky(); _fire_spotlights()
+#             _decoy_flash_active = False
+#         time.sleep(0.8)
 
-    print()
-    print("3. Countdown — 10 to 1...")
-    for t in range(10, 0, -1):
-        on_countdown(t)
-        time.sleep(1)
+#     print()
+#     print("3. Countdown — 10 to 1...")
+#     for t in range(10, 0, -1):
+#         on_countdown(t)
+#         time.sleep(1)
 
-    print()
-    print("4. Stage 1 WIN...")
-    on_stage_win(1)
-    time.sleep(4)
+#     print()
+#     print("4. Stage 1 WIN...")
+#     on_stage_win(1)
+#     time.sleep(4)
 
-    print()
-    print("5. New round starts — effects clear, spooky + sequence restore...")
-    on_tutorial_start()
-    time.sleep(2)
+#     print()
+#     print("5. New round starts — effects clear, spooky + sequence restore...")
+#     on_tutorial_start()
+#     time.sleep(2)
 
-    print()
-    print("6. Stage 2 LOSE...")
-    on_stage_lose(2)
-    time.sleep(4)
+#     print()
+#     print("6. Stage 2 LOSE...")
+#     on_stage_lose(2)
+#     time.sleep(4)
 
-    print()
-    print("7. FINAL WIN...")
-    on_win()
-    time.sleep(6)
+#     print()
+#     print("7. FINAL WIN...")
+#     on_win()
+#     time.sleep(6)
 
-    print()
-    print("8. Restart...")
-    on_game_restart()
-    time.sleep(3)
+#     print()
+#     print("8. Restart...")
+#     on_game_restart()
+#     time.sleep(3)
 
-    print()
-    print("9. FINAL LOSE + heartbeat...")
-    on_tutorial_start()
-    time.sleep(1)
-    on_lose()
-    time.sleep(6)
+#     print()
+#     print("9. FINAL LOSE + heartbeat...")
+#     on_tutorial_start()
+#     time.sleep(1)
+#     on_lose()
+#     time.sleep(6)
 
-    print()
-    print("10. Game close — all lights off...")
-    on_game_close()
+#     print()
+#     print("10. Game close — all lights off...")
+#     on_game_close()
 
-    print()
-    print("=== TEST COMPLETE — delete test block when done ===")
+#     print()
+#     print("=== TEST COMPLETE — delete test block when done ===")
