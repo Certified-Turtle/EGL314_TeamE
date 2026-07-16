@@ -54,7 +54,7 @@ SPOTLIGHT_B      = "Fixture 202"
 SPOTLIGHT_B_PAN  = -140.56
 SPOTLIGHT_B_TILT = -11.78
 
-SPOTLIGHT_DIMMER = 100
+SPOTLIGHT_DIMMER = 50
 
 # Lightning — ALL Mistrals
 FLASH_FIXTURES    = ALL_MISTRAL
@@ -220,7 +220,7 @@ def _fire_spotlights():
     # effect, not driven by this script) — force it off every time spotlights fire.
     _set_dimmer("Fixture 601", 0)
 
-    print(f"[LIGHTING] Spotlights ON — {SPOTLIGHT_A} and {SPOTLIGHT_B} white 100%, Fixture 601 forced off")
+    print(f"[LIGHTING] Spotlights ON — {SPOTLIGHT_A} and {SPOTLIGHT_B} white 50%, Fixture 601 forced off")
 
 
 def _stop_all_effects():
