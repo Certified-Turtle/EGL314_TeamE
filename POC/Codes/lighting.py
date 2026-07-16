@@ -54,20 +54,21 @@ SPOTLIGHT_B      = "Fixture 202"
 SPOTLIGHT_B_PAN  = -140.56
 SPOTLIGHT_B_TILT = -11.78
 
-SPOTLIGHT_DIMMER = 50
+SPOTLIGHT_DIMMER = 35
+
 
 # Lightning — ALL Mistrals
 FLASH_FIXTURES    = ALL_MISTRAL
-FLASH_DIMMER      = 100
+FLASH_DIMMER      = 25
 FLASH_DURATION_MS = 150
 
 # Only these 4 Mistrals actually flash, each at a hardcoded pan/tilt.
 # Any other Mistral (i.e. 703, 803) is forced off during lightning.
 FLASH_POSITIONS = {
-    "Fixture 103": (54, 19),
-    "Fixture 203": (45, 19),
-    "Fixture 503": (55, 19),
-    "Fixture 603": (46, 19),
+    "Fixture 103": (-155, 125),
+    "Fixture 203": (-155, 125),
+    "Fixture 503": (155, 125),
+    "Fixture 603": (155, 125),
 }
 FLASH_OFF_FIXTURES = [fix for fix in ALL_MISTRAL if fix not in FLASH_POSITIONS]
 
@@ -87,6 +88,9 @@ COUNTDOWN_FLASH_DURATION_MS = 120
 # Pan/Tilt ranges (for spotlights only)
 PAN_MIN,  PAN_MAX  = -315, 315
 TILT_MIN, TILT_MAX = -135, 135
+
+FOCUS_MIN, FOCUS_MAX = 0, 100
+FLASH_FOCUS = 100
 
 # Colour ranges
 RED_MIN,   RED_MAX   = 0, 255
@@ -393,6 +397,7 @@ def on_lightning_flash():
     for fix, (pan, tilt) in FLASH_POSITIONS.items():
         _set_attribute(fix, "pan",  pan,  PAN_MIN, PAN_MAX)
         _set_attribute(fix, "tilt", tilt, TILT_MIN, TILT_MAX)
+        _set_attribute(fix, "focus", FLASH_FOCUS, FOCUS_MIN, FOCUS_MAX)
         _set_colour(fix, 255, 255, 255)
         _set_dimmer(fix, FLASH_DIMMER)
 
