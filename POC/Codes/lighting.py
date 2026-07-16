@@ -25,14 +25,13 @@ GMA3_ADDR = "/gma3/cmd"
 # =================================================================
 # === FIXTURE GROUPS ===
 # =================================================================
-# ePar fixtures EXCEPT the two spotlights (501 and 201)
 ALL_EPAR = [
-    "Fixture 101", "Fixture 601", "Fixture 702", "Fixture 801"
+    "Fixture 101", "Fixture 201", "Fixture 501", "Fixture 601", "Fixture 702", "Fixture 801"
 ]
 
-# All MiniPanels (502 and 202 are now plain MiniPanels, no longer spotlights)
+# All MiniPanels EXCEPT the two spotlights (502 and 202)
 ALL_MINIPANEL = [
-    "Fixture 102", "Fixture 202", "Fixture 502", "Fixture 602", "Fixture 701", "Fixture 802"
+    "Fixture 102", "Fixture 602", "Fixture 701", "Fixture 802"
 ]
 
 # All Mistrals — all used for lightning
@@ -44,14 +43,14 @@ ALL_MAGICBLADE = [
     "Fixture 104", "Fixture 204", "Fixture 504", "Fixture 604", "Fixture 704", "Fixture 804"
 ]
 
-ALL_FIXTURES = ALL_EPAR + ALL_MINIPANEL + ["Fixture 501", "Fixture 201"] + ALL_MISTRAL + ALL_MAGICBLADE
+ALL_FIXTURES = ALL_EPAR + ALL_MINIPANEL + ["Fixture 202", "Fixture 502"] + ALL_MISTRAL + ALL_MAGICBLADE
 
-# Spotlights — ePar 501 and 201, white, pan/tilt hardcoded, always on
-SPOTLIGHT_A      = "Fixture 501"
+# Spotlights — MiniPanel 502 and 202, white, pan/tilt hardcoded, always on
+SPOTLIGHT_A      = "Fixture 502"
 SPOTLIGHT_A_PAN  = -71.26
 SPOTLIGHT_A_TILT = -27.53
 
-SPOTLIGHT_B      = "Fixture 201"
+SPOTLIGHT_B      = "Fixture 202"
 SPOTLIGHT_B_PAN  = -140.56
 SPOTLIGHT_B_TILT = -11.78
 
