@@ -9,8 +9,8 @@
 #   MagicBlade:  104, 204, 304, 404, 504, 604, 704, 804  ← effects, colour only
 #
 # Spotlights (pan/tilt hardcoded, always on):
-#   MiniPanel 502 — pan -71.26,  tilt -27.53, 100% white
-#   MiniPanel 202 — pan -140.56, tilt -11.78, 100% white
+#   ePar 501 — pan -71.26,  tilt -27.53, 100% white
+#   ePar 201 — pan -140.56, tilt -11.78, 100% white
 
 import pygame
 from pythonosc import udp_client
@@ -25,13 +25,14 @@ GMA3_ADDR = "/gma3/cmd"
 # =================================================================
 # === FIXTURE GROUPS ===
 # =================================================================
+# ePar fixtures EXCEPT the two spotlights (501 and 201)
 ALL_EPAR = [
-    "Fixture 101", "Fixture 201", "Fixture 501", "Fixture 601", "Fixture 702", "Fixture 801"
+    "Fixture 101", "Fixture 601", "Fixture 702", "Fixture 801"
 ]
 
-# All MiniPanels EXCEPT the two spotlights (502 and 202)
+# All MiniPanels (502 and 202 are now plain MiniPanels, no longer spotlights)
 ALL_MINIPANEL = [
-    "Fixture 102", "Fixture 602", "Fixture 701", "Fixture 802"
+    "Fixture 102", "Fixture 202", "Fixture 502", "Fixture 602", "Fixture 701", "Fixture 802"
 ]
 
 # All Mistrals — all used for lightning
@@ -43,14 +44,14 @@ ALL_MAGICBLADE = [
     "Fixture 104", "Fixture 204", "Fixture 504", "Fixture 604", "Fixture 704", "Fixture 804"
 ]
 
-ALL_FIXTURES = ALL_EPAR + ALL_MINIPANEL + ["Fixture 202", "Fixture 502"] + ALL_MISTRAL + ALL_MAGICBLADE
+ALL_FIXTURES = ALL_EPAR + ALL_MINIPANEL + ["Fixture 501", "Fixture 201"] + ALL_MISTRAL + ALL_MAGICBLADE
 
-# Spotlights — MiniPanel 502 and 202, white, pan/tilt hardcoded, always on
-SPOTLIGHT_A      = "Fixture 502"
+# Spotlights — ePar 501 and 201, white, pan/tilt hardcoded, always on
+SPOTLIGHT_A      = "Fixture 501"
 SPOTLIGHT_A_PAN  = -71.26
 SPOTLIGHT_A_TILT = -27.53
 
-SPOTLIGHT_B      = "Fixture 202"
+SPOTLIGHT_B      = "Fixture 201"
 SPOTLIGHT_B_PAN  = -140.56
 SPOTLIGHT_B_TILT = -11.78
 
@@ -103,7 +104,7 @@ BLUE_MIN,  BLUE_MAX  = 0, 255
 # during gameplay (started on_tutorial_start / on_thumbsup_accepted,
 # stopped on countdown / decoy-hit-safe / stage end / restart).
 # Mistrals are left untouched — they're reserved for lightning flashes.
-# Spotlights (502 / 202) are NOT touched by this — they stay fixed at
+# Spotlights (501 / 201) are NOT touched by this — they stay fixed at
 # their hardcoded pan/tilt the whole time, per _fire_spotlights().
 # =================================================================
 SEQUENCE_STEP_MS = 350  # how long each step holds before moving to the next
@@ -206,9 +207,8 @@ def _all_lights_off():
 
 def _fire_spotlights():
     """
-    Bring up both MiniPanel spotlights at their hardcoded pan/tilt.
-    White, 100% brightness. ONLY these two fixtures have pan/tilt set by Python
-    (outside of the round sequence sweep, which reuses this same pair).
+    Bring up both ePar spotlights at their hardcoded pan/tilt.
+    White, 100% brightness. ONLY these two fixtures have pan/tilt set by Python.
     """
     _set_colour(SPOTLIGHT_A, 255, 255, 255)
     _set_dimmer(SPOTLIGHT_A, SPOTLIGHT_DIMMER)
@@ -224,7 +224,7 @@ def _fire_spotlights():
     # effect, not driven by this script) — force it off every time spotlights fire.
     _set_dimmer("Fixture 601", 0)
 
-    print(f"[LIGHTING] Spotlights ON — {SPOTLIGHT_A} and {SPOTLIGHT_B} white 50%, Fixture 601 forced off")
+    print(f"[LIGHTING] Spotlights ON — {SPOTLIGHT_A} and {SPOTLIGHT_B} white, Fixture 601 forced off")
 
 
 def _stop_all_effects():
@@ -262,7 +262,7 @@ def _start_round_sequence():
 def _setup_spooky():
     """
     Dimmed spooky atmosphere. No pan/tilt — GMA3 controls Mistral positions.
-    Spotlights (502, 202) excluded — handled by _fire_spotlights().
+    Spotlights (501, 201) excluded — handled by _fire_spotlights().
 
     ePar:       dark charcoal blue-grey, very low
     MiniPanel:  deep olive green, very dim (excludes spotlights)
