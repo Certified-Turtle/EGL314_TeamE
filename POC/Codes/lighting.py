@@ -61,6 +61,16 @@ FLASH_FIXTURES    = ALL_MISTRAL
 FLASH_DIMMER      = 100
 FLASH_DURATION_MS = 150
 
+# Only these 4 Mistrals actually flash, each at a hardcoded pan/tilt.
+# Any other Mistral (i.e. 703, 803) is forced off during lightning.
+FLASH_POSITIONS = {
+    "Fixture 103": (54, 19),
+    "Fixture 203": (45, 19),
+    "Fixture 503": (55, 19),
+    "Fixture 603": (46, 19),
+}
+FLASH_OFF_FIXTURES = [fix for fix in ALL_MISTRAL if fix not in FLASH_POSITIONS]
+
 # Decoy hit flash duration
 DECOY_FLASH_DURATION_MS = 350
 
@@ -97,13 +107,13 @@ SEQUENCE_STEP_MS = 350  # how long each step holds before moving to the next
 # Each step = (epar_rgb+dim, minipanel_rgb+dim, magicblade_rgb+dim)
 ROUND_SEQUENCE = [
     # step 0: ePar bright
-    {"epar": (40, 20, 90, 55), "minipanel": (10, 20, 10, 10), "magicblade": (40, 5, 5, 10)},
+    {"epar": (60, 30, 130, 80), "minipanel": (20, 35, 20, 25), "magicblade": (60, 10, 10, 25)},
     # step 1: MiniPanel bright
-    {"epar": (20, 15, 50, 15), "minipanel": (15, 60, 15, 55), "magicblade": (40, 5, 5, 10)},
+    {"epar": (35, 25, 75, 35), "minipanel": (25, 90, 25, 80), "magicblade": (60, 10, 10, 25)},
     # step 2: MagicBlade bright
-    {"epar": (20, 15, 50, 15), "minipanel": (10, 20, 10, 10), "magicblade": (90, 15, 15, 60)},
+    {"epar": (35, 25, 75, 35), "minipanel": (20, 35, 20, 25), "magicblade": (130, 25, 25, 85)},
     # step 3: all low (breath before repeating)
-    {"epar": (20, 15, 50, 15), "minipanel": (10, 20, 10, 10), "magicblade": (40, 5, 5, 10)},
+    {"epar": (35, 25, 75, 35), "minipanel": (20, 35, 20, 25), "magicblade": (60, 10, 10, 25)},
 ]
 
 # =================================================================
@@ -256,16 +266,16 @@ def _setup_spooky():
     MagicBlade: dark rust/maroon, low
     """
     for fix in ALL_EPAR:
-        _set_colour(fix, 30, 30, 60);   _set_dimmer(fix, 25)
+        _set_colour(fix, 45, 45, 90);   _set_dimmer(fix, 45)
 
     for fix in ALL_MINIPANEL:
-        _set_colour(fix, 20, 45, 20);   _set_dimmer(fix, 20)
+        _set_colour(fix, 35, 70, 35);   _set_dimmer(fix, 38)
 
     for fix in ALL_MISTRAL:
-        _set_colour(fix, 20, 30, 80);   _set_dimmer(fix, 30)
+        _set_colour(fix, 35, 50, 120);  _set_dimmer(fix, 50)
 
     for fix in ALL_MAGICBLADE:
-        _set_colour(fix, 60, 10, 10);   _set_dimmer(fix, 20)
+        _set_colour(fix, 90, 20, 20);   _set_dimmer(fix, 38)
 
     print("[LIGHTING] Spooky atmosphere set.")
 
@@ -273,16 +283,16 @@ def _setup_spooky():
 def _setup_countdown():
     """Last 10 seconds — deep blood red. No pan/tilt. Spotlights stay white."""
     for fix in ALL_EPAR:
-        _set_colour(fix, 80, 0, 0);     _set_dimmer(fix, 40)
+        _set_colour(fix, 120, 0, 0);    _set_dimmer(fix, 60)
 
     for fix in ALL_MINIPANEL:
-        _set_colour(fix, 60, 0, 0);     _set_dimmer(fix, 35)
+        _set_colour(fix, 100, 0, 0);    _set_dimmer(fix, 55)
 
     for fix in ALL_MISTRAL:
-        _set_colour(fix, 120, 0, 0);    _set_dimmer(fix, 50)
+        _set_colour(fix, 170, 0, 0);    _set_dimmer(fix, 75)
 
     for fix in ALL_MAGICBLADE:
-        _set_colour(fix, 100, 0, 0);    _set_dimmer(fix, 35)
+        _set_colour(fix, 150, 0, 0);    _set_dimmer(fix, 55)
 
     print("[LIGHTING] Countdown atmosphere — blood red.")
 
@@ -290,16 +300,16 @@ def _setup_countdown():
 def _setup_thumbsup():
     """Calm cool white for gesture reading. No pan/tilt. Spotlights stay."""
     for fix in ALL_EPAR:
-        _set_colour(fix, 100, 100, 140); _set_dimmer(fix, 45)
+        _set_colour(fix, 140, 140, 180); _set_dimmer(fix, 65)
 
     for fix in ALL_MINIPANEL:
-        _set_colour(fix, 80, 80, 120);   _set_dimmer(fix, 40)
+        _set_colour(fix, 120, 120, 160); _set_dimmer(fix, 60)
 
     for fix in ALL_MISTRAL:
-        _set_colour(fix, 160, 160, 200); _set_dimmer(fix, 40)
+        _set_colour(fix, 200, 200, 230); _set_dimmer(fix, 60)
 
     for fix in ALL_MAGICBLADE:
-        _set_colour(fix, 80, 80, 120);   _set_dimmer(fix, 30)
+        _set_colour(fix, 120, 120, 160); _set_dimmer(fix, 50)
 
     print("[LIGHTING] Thumbs up atmosphere — cool white/blue.")
 
@@ -366,8 +376,9 @@ def on_thumbsup_accepted():
 def on_lightning_flash():
     """
     Call when in-game lightning activates.
-    ALL Mistrals snap white. update() cuts after FLASH_DURATION_MS.
-    (Untouched by the round sequence — Mistrals are reserved for this.)
+    Only the 4 hardcoded Mistrals (103, 203, 503, 603) snap white at their
+    fixed pan/tilt positions. Any other Mistral (703, 803) is forced off.
+    update() cuts after FLASH_DURATION_MS.
     """
     global _flash_active, _flash_trigger_ms
 
@@ -379,9 +390,14 @@ def on_lightning_flash():
     _flash_active     = True
     _flash_trigger_ms = pygame.time.get_ticks()
 
-    for fix in FLASH_FIXTURES:
+    for fix, (pan, tilt) in FLASH_POSITIONS.items():
+        _set_attribute(fix, "pan",  pan,  PAN_MIN, PAN_MAX)
+        _set_attribute(fix, "tilt", tilt, TILT_MIN, TILT_MAX)
         _set_colour(fix, 255, 255, 255)
         _set_dimmer(fix, FLASH_DIMMER)
+
+    for fix in FLASH_OFF_FIXTURES:
+        _set_dimmer(fix, 0)
 
     print("[LIGHTING] ⚡ Lightning ON!")
 
@@ -401,13 +417,13 @@ def on_decoy_hit():
     _decoy_flash_trigger_ms = pygame.time.get_ticks()
 
     for fix in ALL_EPAR:
-        _set_colour(fix, 180, 0, 0);    _set_dimmer(fix, 70)
+        _set_colour(fix, 220, 0, 0);    _set_dimmer(fix, 90)
     for fix in ALL_MINIPANEL:
-        _set_colour(fix, 160, 0, 0);    _set_dimmer(fix, 65)
+        _set_colour(fix, 200, 0, 0);    _set_dimmer(fix, 85)
     for fix in ALL_MISTRAL:
-        _set_colour(fix, 200, 0, 0);    _set_dimmer(fix, 75)
+        _set_colour(fix, 240, 0, 0);    _set_dimmer(fix, 95)
     for fix in ALL_MAGICBLADE:
-        _set_colour(fix, 180, 0, 0);    _set_dimmer(fix, 60)
+        _set_colour(fix, 220, 0, 0);    _set_dimmer(fix, 80)
 
     print("[LIGHTING] 🎃 DECOY HIT — red slam!")
 
@@ -436,9 +452,9 @@ def on_countdown(time_left: int):
             _countdown_flash_ms     = pygame.time.get_ticks()
 
             for fix in ALL_EPAR:
-                _set_colour(fix, 200, 0, 0);    _set_dimmer(fix, 80)
+                _set_colour(fix, 240, 0, 0);    _set_dimmer(fix, 100)
             for fix in ALL_MINIPANEL:
-                _set_colour(fix, 180, 0, 0);    _set_dimmer(fix, 70)
+                _set_colour(fix, 220, 0, 0);    _set_dimmer(fix, 95)
 
             print(f"[LIGHTING] ⚡ Countdown flash — {time_left}s!")
 
@@ -657,9 +673,9 @@ def update():
     if _countdown_flash_active:
         if now - _countdown_flash_ms > COUNTDOWN_FLASH_DURATION_MS:
             for fix in ALL_EPAR:
-                _set_colour(fix, 80, 0, 0);     _set_dimmer(fix, 40)
+                _set_colour(fix, 120, 0, 0);    _set_dimmer(fix, 60)
             for fix in ALL_MINIPANEL:
-                _set_colour(fix, 60, 0, 0);     _set_dimmer(fix, 35)
+                _set_colour(fix, 100, 0, 0);    _set_dimmer(fix, 55)
             _countdown_flash_active = False
 
     # --- Stage win bright gold pulse ---
@@ -692,7 +708,7 @@ def update():
     if _stage_lose_active:
         if now - _stage_lose_last_ms >= STAGE_LOSE_PULSE_MS:
             _stage_lose_on = not _stage_lose_on
-            dimmer = 100 if _stage_lose_on else 15
+            dimmer = 60 if _stage_lose_on else 15
             for fix in ALL_MAGICBLADE:
                 _set_colour(fix, 100, 0, 0);    _set_dimmer(fix, dimmer)
             _stage_lose_last_ms = now
@@ -703,14 +719,14 @@ def update():
             _final_win_on = not _final_win_on
             if _final_win_on:
                 for fix in ALL_MINIPANEL:
-                    _set_colour(fix, 180, 120, 0);  _set_dimmer(fix, 100)
+                    _set_colour(fix, 180, 120, 0);  _set_dimmer(fix, 85)
                 for fix in ALL_MAGICBLADE:
-                    _set_colour(fix, 200, 130, 0);  _set_dimmer(fix, 100)
+                    _set_colour(fix, 200, 130, 0);  _set_dimmer(fix, 85)
             else:
                 for fix in ALL_MINIPANEL:
-                    _set_colour(fix, 90, 60, 0);    _set_dimmer(fix, 100)
+                    _set_colour(fix, 90, 60, 0);    _set_dimmer(fix, 40)
                 for fix in ALL_MAGICBLADE:
-                    _set_colour(fix, 100, 65, 0);   _set_dimmer(fix, 100)
+                    _set_colour(fix, 100, 65, 0);   _set_dimmer(fix, 38)
 
             _final_win_step    += 1
             _final_win_last_ms  = now
@@ -718,16 +734,16 @@ def update():
             if _final_win_step >= 12:
                 _final_win_active = False
                 for fix in ALL_MINIPANEL:
-                    _set_colour(fix, 150, 100, 0);  _set_dimmer(fix, 100)
+                    _set_colour(fix, 150, 100, 0);  _set_dimmer(fix, 65)
                 for fix in ALL_MAGICBLADE:
-                    _set_colour(fix, 160, 105, 0);  _set_dimmer(fix, 100)
+                    _set_colour(fix, 160, 105, 0);  _set_dimmer(fix, 65)
                 print("[LIGHTING] Final win pulse complete — holding amber.")
 
     # --- Final lose heartbeat ---
     if _final_lose_active:
         if now - _final_lose_last_ms >= 700:
             _final_lose_on = not _final_lose_on
-            dimmer = 100 if _final_lose_on else 50
+            dimmer = 60 if _final_lose_on else 15
             for fix in ALL_MAGICBLADE:
                 _set_colour(fix, 100, 0, 0);    _set_dimmer(fix, dimmer)
             _final_lose_last_ms = now
