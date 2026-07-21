@@ -9,8 +9,8 @@
 #   MagicBlade:  104, 204, 304, 404, 504, 604, 704, 804  ← effects, colour only
 #
 # Spotlights (pan/tilt hardcoded, always on):
-#   ePar 501 — pan -71.26,  tilt -27.53, 100% white
-#   ePar 201 — pan -140.56, tilt -11.78, 100% white
+#   MiniPanel 502 — pan -71.26,  tilt -27.53, 100% white
+#   MiniPanel 202 — pan -140.56, tilt -11.78, 100% white
 
 import pygame
 from pythonosc import udp_client
@@ -103,7 +103,7 @@ BLUE_MIN,  BLUE_MAX  = 0, 255
 # during gameplay (started on_tutorial_start / on_thumbsup_accepted,
 # stopped on countdown / decoy-hit-safe / stage end / restart).
 # Mistrals are left untouched — they're reserved for lightning flashes.
-# Spotlights (501 / 201) are NOT touched by this — they stay fixed at
+# Spotlights (502 / 202) are NOT touched by this — they stay fixed at
 # their hardcoded pan/tilt the whole time, per _fire_spotlights().
 # =================================================================
 SEQUENCE_STEP_MS = 350  # how long each step holds before moving to the next
@@ -206,7 +206,7 @@ def _all_lights_off():
 
 def _fire_spotlights():
     """
-    Bring up both ePar spotlights at their hardcoded pan/tilt.
+    Bring up both MiniPanel spotlights at their hardcoded pan/tilt.
     White, 100% brightness. ONLY these two fixtures have pan/tilt set by Python.
     """
     _set_colour(SPOTLIGHT_A, 255, 255, 255)
@@ -261,7 +261,7 @@ def _start_round_sequence():
 def _setup_spooky():
     """
     Dimmed spooky atmosphere. No pan/tilt — GMA3 controls Mistral positions.
-    Spotlights (501, 201) excluded — handled by _fire_spotlights().
+    Spotlights (502, 202) excluded — handled by _fire_spotlights().
 
     ePar:       dark charcoal blue-grey, very low
     MiniPanel:  deep olive green, very dim (excludes spotlights)
