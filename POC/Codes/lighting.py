@@ -654,6 +654,10 @@ def update():
             for fix in ALL_MAGICBLADE:
                 _set_colour(fix, gr, gg, gb); _set_dimmer(fix, gd)
 
+            # Safety net: re-pin the spotlights to white every step in case
+            # a console-side cue/group overlap is sneaking other colours in.
+            _fire_spotlights()
+
     # --- Lightning cutoff ---
     if _flash_active:
         if now - _flash_trigger_ms > FLASH_DURATION_MS:
