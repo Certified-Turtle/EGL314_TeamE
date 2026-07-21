@@ -96,6 +96,12 @@ FLASH_FOCUS = 100
 WHITE_MIN, WHITE_MAX = 0, 100
 SPOTLIGHT_WHITE = 100
 
+# Zoom range (for spotlights only). On most GMA3 profiles 0 = narrow/far
+# throw, max = wide/flood. Set to narrow so the beam reaches further.
+# If it comes out backwards on your rig, flip this to ZOOM_MAX.
+ZOOM_MIN, ZOOM_MAX = 0, 100
+SPOTLIGHT_ZOOM = ZOOM_MIN
+
 # Colour ranges
 RED_MIN,   RED_MAX   = 0, 255
 GREEN_MIN, GREEN_MAX = 0, 255
@@ -213,17 +219,19 @@ def _fire_spotlights():
     Bring up both MiniPanel spotlights at their hardcoded pan/tilt.
     White, 100% brightness. ONLY these two fixtures have pan/tilt set by Python.
     """
-    _set_colour(SPOTLIGHT_A, 255, 255, 255)
+    _set_colour(SPOTLIGHT_A, 0, 0, 0)
     _set_dimmer(SPOTLIGHT_A, SPOTLIGHT_DIMMER)
     _set_attribute(SPOTLIGHT_A, "pan",  SPOTLIGHT_A_PAN,  PAN_MIN, PAN_MAX)
     _set_attribute(SPOTLIGHT_A, "tilt", SPOTLIGHT_A_TILT, TILT_MIN, TILT_MAX)
     _set_attribute(SPOTLIGHT_A, "White", SPOTLIGHT_WHITE, WHITE_MIN, WHITE_MAX)
+    _set_attribute(SPOTLIGHT_A, "Zoom",  SPOTLIGHT_ZOOM,  ZOOM_MIN, ZOOM_MAX)
 
-    _set_colour(SPOTLIGHT_B, 255, 255, 255)
+    _set_colour(SPOTLIGHT_B, 0, 0, 0)
     _set_dimmer(SPOTLIGHT_B, SPOTLIGHT_DIMMER)
     _set_attribute(SPOTLIGHT_B, "pan",  SPOTLIGHT_B_PAN,  PAN_MIN, PAN_MAX)
     _set_attribute(SPOTLIGHT_B, "tilt", SPOTLIGHT_B_TILT, TILT_MIN, TILT_MAX)
     _set_attribute(SPOTLIGHT_B, "White", SPOTLIGHT_WHITE, WHITE_MIN, WHITE_MAX)
+    _set_attribute(SPOTLIGHT_B, "Zoom",  SPOTLIGHT_ZOOM,  ZOOM_MIN, ZOOM_MAX)
 
     # Fixture 601 turns on/color-cycles alongside the spotlights (console-side
     # effect, not driven by this script) — force it off every time spotlights fire.
