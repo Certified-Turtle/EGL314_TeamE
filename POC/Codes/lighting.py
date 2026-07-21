@@ -219,14 +219,14 @@ def _fire_spotlights():
     Bring up both MiniPanel spotlights at their hardcoded pan/tilt.
     White, 100% brightness. ONLY these two fixtures have pan/tilt set by Python.
     """
-    _set_colour(SPOTLIGHT_A, 0, 0, 0)
+    _set_colour(SPOTLIGHT_A, 235, 255, 255)
     _set_dimmer(SPOTLIGHT_A, SPOTLIGHT_DIMMER)
     _set_attribute(SPOTLIGHT_A, "pan",  SPOTLIGHT_A_PAN,  PAN_MIN, PAN_MAX)
     _set_attribute(SPOTLIGHT_A, "tilt", SPOTLIGHT_A_TILT, TILT_MIN, TILT_MAX)
     _set_attribute(SPOTLIGHT_A, "White", SPOTLIGHT_WHITE, WHITE_MIN, WHITE_MAX)
     _set_attribute(SPOTLIGHT_A, "Zoom",  SPOTLIGHT_ZOOM,  ZOOM_MIN, ZOOM_MAX)
 
-    _set_colour(SPOTLIGHT_B, 0, 0, 0)
+    _set_colour(SPOTLIGHT_B, 235, 255, 255)
     _set_dimmer(SPOTLIGHT_B, SPOTLIGHT_DIMMER)
     _set_attribute(SPOTLIGHT_B, "pan",  SPOTLIGHT_B_PAN,  PAN_MIN, PAN_MAX)
     _set_attribute(SPOTLIGHT_B, "tilt", SPOTLIGHT_B_TILT, TILT_MIN, TILT_MAX)
