@@ -92,6 +92,10 @@ TILT_MIN, TILT_MAX = -135, 135
 FOCUS_MIN, FOCUS_MAX = 0, 100
 FLASH_FOCUS = 100
 
+# White channel range (for spotlights only)
+WHITE_MIN, WHITE_MAX = 0, 100
+SPOTLIGHT_WHITE = 100
+
 # Colour ranges
 RED_MIN,   RED_MAX   = 0, 255
 GREEN_MIN, GREEN_MAX = 0, 255
@@ -213,11 +217,13 @@ def _fire_spotlights():
     _set_dimmer(SPOTLIGHT_A, SPOTLIGHT_DIMMER)
     _set_attribute(SPOTLIGHT_A, "pan",  SPOTLIGHT_A_PAN,  PAN_MIN, PAN_MAX)
     _set_attribute(SPOTLIGHT_A, "tilt", SPOTLIGHT_A_TILT, TILT_MIN, TILT_MAX)
+    _set_attribute(SPOTLIGHT_A, "White", SPOTLIGHT_WHITE, WHITE_MIN, WHITE_MAX)
 
     _set_colour(SPOTLIGHT_B, 255, 255, 255)
     _set_dimmer(SPOTLIGHT_B, SPOTLIGHT_DIMMER)
     _set_attribute(SPOTLIGHT_B, "pan",  SPOTLIGHT_B_PAN,  PAN_MIN, PAN_MAX)
     _set_attribute(SPOTLIGHT_B, "tilt", SPOTLIGHT_B_TILT, TILT_MIN, TILT_MAX)
+    _set_attribute(SPOTLIGHT_B, "White", SPOTLIGHT_WHITE, WHITE_MIN, WHITE_MAX)
 
     # Fixture 601 turns on/color-cycles alongside the spotlights (console-side
     # effect, not driven by this script) — force it off every time spotlights fire.
