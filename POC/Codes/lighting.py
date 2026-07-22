@@ -8,9 +8,9 @@
 #   Mistral:     103, 203, 303, 403, 503, 603, 703, 803  ← all used for lightning
 #   MagicBlade:  104, 204, 304, 404, 504, 604, 704, 804  ← effects, colour only
 #
-# Spotlights (pan/tilt hardcoded, always on):
-#   MiniPanel 502 — pan -71.26,  tilt -27.53, 100% white
-#   MiniPanel 202 — pan -140.56, tilt -11.78, 100% white
+# Spotlights (handled by GMA3 sequence "spotlightE", not hardcoded here):
+#   MiniPanel 502
+#   MiniPanel 202
 
 import pygame
 from pythonosc import udp_client
@@ -45,16 +45,12 @@ ALL_MAGICBLADE = [
 
 ALL_FIXTURES = ALL_EPAR + ALL_MINIPANEL + ["Fixture 202", "Fixture 502"] + ALL_MISTRAL + ALL_MAGICBLADE
 
-# Spotlights — MiniPanel 502 and 202, white, pan/tilt hardcoded, always on
-SPOTLIGHT_A      = "Fixture 502"
-SPOTLIGHT_A_PAN  = -71.26
-SPOTLIGHT_A_TILT = -27.53
-
-SPOTLIGHT_B      = "Fixture 202"
-SPOTLIGHT_B_PAN  = -140.56
-SPOTLIGHT_B_TILT = -11.78
-
-SPOTLIGHT_DIMMER = 35
+# Spotlights — MiniPanel 502 and 202. Positioning, colour, focus, etc. are
+# now handled entirely by the "spotlightE" sequence on the GMA3 — Python
+# just fires that sequence rather than setting individual attributes.
+SPOTLIGHT_A = "Fixture 502"
+SPOTLIGHT_B = "Fixture 202"
+SPOTLIGHT_SEQUENCE_NAME = "spotlightE"
 
 
 # Lightning — ALL Mistrals
@@ -92,20 +88,6 @@ TILT_MIN, TILT_MAX = -135, 135
 FOCUS_MIN, FOCUS_MAX = 0, 100
 FLASH_FOCUS = 100
 
-# White channel range (for spotlights only)
-WHITE_MIN, WHITE_MAX = 0, 100
-SPOTLIGHT_WHITE = 100
-
-# "Q" fader in the GMA3 colour picker — pushes the mix to pure white
-# regardless of R/G/B, same attribute family as ColorRGB_R/G/B.
-Q_MIN, Q_MAX = 0, 100
-SPOTLIGHT_Q = 100
-
-# Zoom range (for spotlights only). On most GMA3 profiles 0 = narrow/far
-# throw, max = wide/flood. Nudged up from fully narrow for a bit more spread.
-ZOOM_MIN, ZOOM_MAX = 0, 100
-SPOTLIGHT_ZOOM = 35
-
 # Colour ranges
 RED_MIN,   RED_MAX   = 0, 255
 GREEN_MIN, GREEN_MAX = 0, 255
@@ -117,21 +99,21 @@ BLUE_MIN,  BLUE_MAX  = 0, 255
 # during gameplay (started on_tutorial_start / on_thumbsup_accepted,
 # stopped on countdown / decoy-hit-safe / stage end / restart).
 # Mistrals are left untouched — they're reserved for lightning flashes.
-# Spotlights (502 / 202) are NOT touched by this — they stay fixed at
-# their hardcoded pan/tilt the whole time, per _fire_spotlights().
+# Spotlights (502 / 202) are NOT touched by this — they're driven by the
+# "spotlightE" GMA3 sequence instead, fired once via _fire_spotlights().
 # =================================================================
 SEQUENCE_STEP_MS = 350  # how long each step holds before moving to the next
 
 # Each step = (epar_rgb+dim, minipanel_rgb+dim, magicblade_rgb+dim)
 ROUND_SEQUENCE = [
-    # step 0: ePar bright orange
-    {"epar": (220, 90, 0, 80), "minipanel": (70, 20, 35, 25), "magicblade": (60, 10, 10, 25)},
+    # step 0: ePar bright yellow
+    {"epar": (220, 200, 0, 40), "minipanel": (70, 20, 35, 12), "magicblade": (60, 10, 10, 12)},
     # step 1: MiniPanel bright pink
-    {"epar": (60, 20, 10, 35), "minipanel": (220, 20, 100, 80), "magicblade": (60, 10, 10, 25)},
+    {"epar": (60, 20, 10, 18), "minipanel": (220, 20, 100, 40), "magicblade": (60, 10, 10, 12)},
     # step 2: MagicBlade bright red
-    {"epar": (60, 20, 10, 35), "minipanel": (70, 20, 35, 25), "magicblade": (220, 0, 0, 85)},
+    {"epar": (60, 20, 10, 18), "minipanel": (70, 20, 35, 12), "magicblade": (220, 0, 0, 42)},
     # step 3: all low (breath before repeating)
-    {"epar": (60, 20, 10, 35), "minipanel": (70, 20, 35, 25), "magicblade": (60, 10, 10, 25)},
+    {"epar": (60, 20, 10, 18), "minipanel": (70, 20, 35, 12), "magicblade": (60, 10, 10, 12)},
 ]
 
 # =================================================================
@@ -220,30 +202,17 @@ def _all_lights_off():
 
 def _fire_spotlights():
     """
-    Bring up both MiniPanel spotlights at their hardcoded pan/tilt.
-    White, 100% brightness. ONLY these two fixtures have pan/tilt set by Python.
+    Trigger the "spotlightE" sequence on the GMA3, which now handles the
+    spotlights' positioning, colour, focus, and zoom natively on the console.
+    Python no longer sets pan/tilt/colour/etc. on Fixture 502/202 directly.
     """
-    _set_colour(SPOTLIGHT_A, 255, 255, 255)
-    _set_dimmer(SPOTLIGHT_A, SPOTLIGHT_DIMMER)
-    _set_attribute(SPOTLIGHT_A, "pan",  SPOTLIGHT_A_PAN,  PAN_MIN, PAN_MAX)
-    _set_attribute(SPOTLIGHT_A, "tilt", SPOTLIGHT_A_TILT, TILT_MIN, TILT_MAX)
-    _set_attribute(SPOTLIGHT_A, "White", SPOTLIGHT_WHITE, WHITE_MIN, WHITE_MAX)
-    _set_attribute(SPOTLIGHT_A, "Zoom",  SPOTLIGHT_ZOOM,  ZOOM_MIN, ZOOM_MAX)
-    _set_attribute(SPOTLIGHT_A, "ColorRGB_Q", SPOTLIGHT_Q, Q_MIN, Q_MAX)
-
-    _set_colour(SPOTLIGHT_B, 255, 255, 255)
-    _set_dimmer(SPOTLIGHT_B, SPOTLIGHT_DIMMER)
-    _set_attribute(SPOTLIGHT_B, "pan",  SPOTLIGHT_B_PAN,  PAN_MIN, PAN_MAX)
-    _set_attribute(SPOTLIGHT_B, "tilt", SPOTLIGHT_B_TILT, TILT_MIN, TILT_MAX)
-    _set_attribute(SPOTLIGHT_B, "White", SPOTLIGHT_WHITE, WHITE_MIN, WHITE_MAX)
-    _set_attribute(SPOTLIGHT_B, "Zoom",  SPOTLIGHT_ZOOM,  ZOOM_MIN, ZOOM_MAX)
-    _set_attribute(SPOTLIGHT_B, "ColorRGB_Q", SPOTLIGHT_Q, Q_MIN, Q_MAX)
+    _send(f"Go+ Sequence '{SPOTLIGHT_SEQUENCE_NAME}'")
 
     # Fixture 601 turns on/color-cycles alongside the spotlights (console-side
     # effect, not driven by this script) — force it off every time spotlights fire.
     _set_dimmer("Fixture 601", 0)
 
-    print(f"[LIGHTING] Spotlights ON — {SPOTLIGHT_A} and {SPOTLIGHT_B} white, Fixture 601 forced off")
+    print(f"[LIGHTING] Spotlight sequence '{SPOTLIGHT_SEQUENCE_NAME}' triggered, Fixture 601 forced off")
 
 
 def _stop_all_effects():
@@ -626,7 +595,8 @@ def on_game_restart():
 
 
 def on_game_close():
-    """Call when the game exits. Turns off every single fixture."""
+    """Call when the game exits. Stops the spotlight sequence and turns off every fixture."""
+    _send(f"Off Sequence '{SPOTLIGHT_SEQUENCE_NAME}'")
     _all_lights_off()
     print("[LIGHTING] Game closed — all lights off.")
 
@@ -673,10 +643,6 @@ def update():
             gr, gg, gb, gd = step["magicblade"]
             for fix in ALL_MAGICBLADE:
                 _set_colour(fix, gr, gg, gb); _set_dimmer(fix, gd)
-
-            # Safety net: re-pin the spotlights to white every step in case
-            # a console-side cue/group overlap is sneaking other colours in.
-            _fire_spotlights()
 
     # --- Lightning cutoff ---
     if _flash_active:
