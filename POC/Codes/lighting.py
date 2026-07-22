@@ -55,18 +55,13 @@ SPOTLIGHT_SEQUENCE_NAME = "spotlightE"
 
 # Lightning — ALL Mistrals
 FLASH_FIXTURES    = ALL_MISTRAL
-FLASH_DIMMER      = 25
 FLASH_DURATION_MS = 150
 
-# Only these 4 Mistrals actually flash, each at a hardcoded pan/tilt.
-# Any other Mistral (i.e. 703, 803) is forced off during lightning.
-FLASH_POSITIONS = {
-    "Fixture 103": (-155, 125),
-    "Fixture 203": (-155, 125),
-    "Fixture 503": (155, 125),
-    "Fixture 603": (155, 125),
-}
-FLASH_OFF_FIXTURES = [fix for fix in ALL_MISTRAL if fix not in FLASH_POSITIONS]
+# The "lightningE" sequence on the GMA3 handles these 4 Mistrals directly.
+# Any other Mistral (i.e. 703, 803) is forced off whenever lightning fires.
+LIGHTNING_SEQUENCE_NAME = "lightningE"
+LIGHTNING_SEQUENCE_FIXTURES = ["Fixture 103", "Fixture 203", "Fixture 503", "Fixture 603"]
+FLASH_OFF_FIXTURES = [fix for fix in ALL_MISTRAL if fix not in LIGHTNING_SEQUENCE_FIXTURES]
 
 # Decoy hit flash duration
 DECOY_FLASH_DURATION_MS = 350
@@ -80,13 +75,6 @@ STAGE_LOSE_PULSE_MS = 500
 
 # Countdown flash per second duration
 COUNTDOWN_FLASH_DURATION_MS = 120
-
-# Pan/Tilt ranges (for spotlights only)
-PAN_MIN,  PAN_MAX  = -315, 315
-TILT_MIN, TILT_MAX = -135, 135
-
-FOCUS_MIN, FOCUS_MAX = 0, 100
-FLASH_FOCUS = 100
 
 # Colour ranges
 RED_MIN,   RED_MAX   = 0, 255
@@ -368,9 +356,9 @@ def on_thumbsup_accepted():
 def on_lightning_flash():
     """
     Call when in-game lightning activates.
-    Only the 4 hardcoded Mistrals (103, 203, 503, 603) snap white at their
-    fixed pan/tilt positions. Any other Mistral (703, 803) is forced off.
-    update() cuts after FLASH_DURATION_MS.
+    Triggers the "lightningE" sequence on the GMA3, which handles the 4
+    flashing Mistrals (103, 203, 503, 603) natively. Any other Mistral
+    (703, 803) is forced off. update() stops the sequence after FLASH_DURATION_MS.
     """
     global _flash_active, _flash_trigger_ms
 
@@ -382,12 +370,7 @@ def on_lightning_flash():
     _flash_active     = True
     _flash_trigger_ms = pygame.time.get_ticks()
 
-    for fix, (pan, tilt) in FLASH_POSITIONS.items():
-        _set_attribute(fix, "pan",  pan,  PAN_MIN, PAN_MAX)
-        _set_attribute(fix, "tilt", tilt, TILT_MIN, TILT_MAX)
-        _set_attribute(fix, "focus", FLASH_FOCUS, FOCUS_MIN, FOCUS_MAX)
-        _set_colour(fix, 255, 255, 255)
-        _set_dimmer(fix, FLASH_DIMMER)
+    _send(f"Go+ Sequence '{LIGHTNING_SEQUENCE_NAME}'")
 
     for fix in FLASH_OFF_FIXTURES:
         _set_dimmer(fix, 0)
@@ -595,8 +578,9 @@ def on_game_restart():
 
 
 def on_game_close():
-    """Call when the game exits. Stops the spotlight sequence and turns off every fixture."""
+    """Call when the game exits. Stops the spotlight and lightning sequences and turns off every fixture."""
     _send(f"Off Sequence '{SPOTLIGHT_SEQUENCE_NAME}'")
+    _send(f"Off Sequence '{LIGHTNING_SEQUENCE_NAME}'")
     _all_lights_off()
     print("[LIGHTING] Game closed — all lights off.")
 
@@ -647,6 +631,7 @@ def update():
     # --- Lightning cutoff ---
     if _flash_active:
         if now - _flash_trigger_ms > FLASH_DURATION_MS:
+            _send(f"Off Sequence '{LIGHTNING_SEQUENCE_NAME}'")
             for fix in FLASH_FIXTURES:
                 _set_dimmer(fix, 0)
             _flash_active = False
