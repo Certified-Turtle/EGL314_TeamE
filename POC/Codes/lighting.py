@@ -102,10 +102,9 @@ Q_MIN, Q_MAX = 0, 100
 SPOTLIGHT_Q = 100
 
 # Zoom range (for spotlights only). On most GMA3 profiles 0 = narrow/far
-# throw, max = wide/flood. Set to narrow so the beam reaches further.
-# If it comes out backwards on your rig, flip this to ZOOM_MAX.
+# throw, max = wide/flood. Nudged up from fully narrow for a bit more spread.
 ZOOM_MIN, ZOOM_MAX = 0, 100
-SPOTLIGHT_ZOOM = ZOOM_MIN
+SPOTLIGHT_ZOOM = 35
 
 # Colour ranges
 RED_MIN,   RED_MAX   = 0, 255
@@ -125,14 +124,14 @@ SEQUENCE_STEP_MS = 350  # how long each step holds before moving to the next
 
 # Each step = (epar_rgb+dim, minipanel_rgb+dim, magicblade_rgb+dim)
 ROUND_SEQUENCE = [
-    # step 0: ePar bright
-    {"epar": (60, 30, 130, 80), "minipanel": (20, 35, 20, 25), "magicblade": (60, 10, 10, 25)},
-    # step 1: MiniPanel bright
-    {"epar": (35, 25, 75, 35), "minipanel": (25, 90, 25, 80), "magicblade": (60, 10, 10, 25)},
-    # step 2: MagicBlade bright
-    {"epar": (35, 25, 75, 35), "minipanel": (20, 35, 20, 25), "magicblade": (130, 25, 25, 85)},
+    # step 0: ePar bright orange
+    {"epar": (220, 90, 0, 80), "minipanel": (70, 20, 35, 25), "magicblade": (60, 10, 10, 25)},
+    # step 1: MiniPanel bright pink
+    {"epar": (60, 20, 10, 35), "minipanel": (220, 20, 100, 80), "magicblade": (60, 10, 10, 25)},
+    # step 2: MagicBlade bright red
+    {"epar": (60, 20, 10, 35), "minipanel": (70, 20, 35, 25), "magicblade": (220, 0, 0, 85)},
     # step 3: all low (breath before repeating)
-    {"epar": (35, 25, 75, 35), "minipanel": (20, 35, 20, 25), "magicblade": (60, 10, 10, 25)},
+    {"epar": (60, 20, 10, 35), "minipanel": (70, 20, 35, 25), "magicblade": (60, 10, 10, 25)},
 ]
 
 # =================================================================
@@ -224,7 +223,7 @@ def _fire_spotlights():
     Bring up both MiniPanel spotlights at their hardcoded pan/tilt.
     White, 100% brightness. ONLY these two fixtures have pan/tilt set by Python.
     """
-    _set_colour(SPOTLIGHT_A, 235, 255, 255)
+    _set_colour(SPOTLIGHT_A, 255, 255, 255)
     _set_dimmer(SPOTLIGHT_A, SPOTLIGHT_DIMMER)
     _set_attribute(SPOTLIGHT_A, "pan",  SPOTLIGHT_A_PAN,  PAN_MIN, PAN_MAX)
     _set_attribute(SPOTLIGHT_A, "tilt", SPOTLIGHT_A_TILT, TILT_MIN, TILT_MAX)
@@ -232,7 +231,7 @@ def _fire_spotlights():
     _set_attribute(SPOTLIGHT_A, "Zoom",  SPOTLIGHT_ZOOM,  ZOOM_MIN, ZOOM_MAX)
     _set_attribute(SPOTLIGHT_A, "ColorRGB_Q", SPOTLIGHT_Q, Q_MIN, Q_MAX)
 
-    _set_colour(SPOTLIGHT_B, 235, 255, 255)
+    _set_colour(SPOTLIGHT_B, 255, 255, 255)
     _set_dimmer(SPOTLIGHT_B, SPOTLIGHT_DIMMER)
     _set_attribute(SPOTLIGHT_B, "pan",  SPOTLIGHT_B_PAN,  PAN_MIN, PAN_MAX)
     _set_attribute(SPOTLIGHT_B, "tilt", SPOTLIGHT_B_TILT, TILT_MIN, TILT_MAX)
@@ -284,19 +283,19 @@ def _setup_spooky():
     Dimmed spooky atmosphere. No pan/tilt — GMA3 controls Mistral positions.
     Spotlights (502, 202) excluded — handled by _fire_spotlights().
 
-    ePar:       dark charcoal blue-grey, very low
-    MiniPanel:  deep olive green, very dim (excludes spotlights)
-    Mistral:    cold steel blue, low
+    ePar:       deep red-maroon, very low
+    MiniPanel:  dark pink/magenta, very dim (excludes spotlights)
+    Mistral:    burnt orange, low
     MagicBlade: dark rust/maroon, low
     """
     for fix in ALL_EPAR:
-        _set_colour(fix, 45, 45, 90);   _set_dimmer(fix, 45)
+        _set_colour(fix, 90, 20, 20);   _set_dimmer(fix, 45)
 
     for fix in ALL_MINIPANEL:
-        _set_colour(fix, 35, 70, 35);   _set_dimmer(fix, 38)
+        _set_colour(fix, 100, 20, 55);  _set_dimmer(fix, 38)
 
     for fix in ALL_MISTRAL:
-        _set_colour(fix, 35, 50, 120);  _set_dimmer(fix, 50)
+        _set_colour(fix, 120, 40, 0);   _set_dimmer(fix, 50)
 
     for fix in ALL_MAGICBLADE:
         _set_colour(fix, 90, 20, 20);   _set_dimmer(fix, 38)
