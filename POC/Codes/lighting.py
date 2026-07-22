@@ -299,20 +299,20 @@ def _setup_countdown():
 
 
 def _setup_thumbsup():
-    """Calm cool white for gesture reading. No pan/tilt. Spotlights stay."""
+    """Bright neutral white for gesture reading. No pan/tilt. Spotlights stay."""
     for fix in ALL_EPAR:
-        _set_colour(fix, 140, 140, 180); _set_dimmer(fix, 65)
+        _set_colour(fix, 200, 200, 200); _set_dimmer(fix, 65)
 
     for fix in ALL_MINIPANEL:
-        _set_colour(fix, 120, 120, 160); _set_dimmer(fix, 60)
+        _set_colour(fix, 180, 180, 180); _set_dimmer(fix, 60)
 
     for fix in ALL_MISTRAL:
-        _set_colour(fix, 200, 200, 230); _set_dimmer(fix, 60)
+        _set_colour(fix, 230, 230, 230); _set_dimmer(fix, 60)
 
     for fix in ALL_MAGICBLADE:
-        _set_colour(fix, 120, 120, 160); _set_dimmer(fix, 50)
+        _set_colour(fix, 180, 180, 180); _set_dimmer(fix, 50)
 
-    print("[LIGHTING] Thumbs up atmosphere — cool white/blue.")
+    print("[LIGHTING] Thumbs up atmosphere — neutral white.")
 
 
 # =================================================================
