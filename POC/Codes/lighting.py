@@ -1,16 +1,23 @@
 # lighting.py
 # Handles all GMA3 OSC lighting control for Haunted Manor: Ghost Hunt
-# FULLY HARDCODED — no GMA3 sequences needed
 #
 # Fixture groups:
 #   ePar 180:    101, 201, 301, 401, 501, 601, 702, 801
 #   MiniPanel:   102, 202, 302, 402, 502, 602, 701, 802
-#   Mistral:     103, 203, 303, 403, 503, 603, 703, 803  ← all used for lightning
-#   MagicBlade:  104, 204, 304, 404, 504, 604, 704, 804  ← effects, colour only
+#   Mistral:     103, 203, 303, 403, 503, 603, 703, 803
+#   MagicBlade:  104, 204, 304, 404, 504, 604, 704, 804
 #
-# Spotlights (handled by GMA3 sequence "spotlightE", not hardcoded here):
-#   MiniPanel 502
-#   MiniPanel 202
+# Spotlights — handled ENTIRELY by the "spotlightE" GMA3 sequence, fired
+# once and left running. Never touched by the game sequence / atmospheres:
+#   MiniPanel 202, 302, 502    MagicBlade 304
+#
+# Lightning — handled ENTIRELY by the "lightningE" GMA3 sequence (a single
+# cue that sets position + brightness). Triggered on/off, never touched by
+# the game sequence / atmospheres:
+#   Mistral 103, 203, 503, 603
+#
+# ALWAYS OFF — never sent any command by this script, at any point:
+#   ePar 301, 401    MiniPanel 402    Mistral 303, 403    MagicBlade 404
 
 import pygame
 from pythonosc import udp_client
@@ -23,45 +30,58 @@ GMA3_PORT = 8080
 GMA3_ADDR = "/gma3/cmd"
 
 # =================================================================
-# === FIXTURE GROUPS ===
+# === FIXTURE GROUPS (game sequence / atmosphere only) ===
+# These groups deliberately exclude spotlight fixtures, lightning
+# fixtures, and the always-off fixtures listed above.
 # =================================================================
 ALL_EPAR = [
     "Fixture 101", "Fixture 201", "Fixture 501", "Fixture 601", "Fixture 702", "Fixture 801"
 ]
 
-# All MiniPanels EXCEPT the two spotlights (502 and 202)
+# MiniPanels EXCEPT the three spotlight fixtures (202, 302, 502) and the
+# always-off fixture (402)
 ALL_MINIPANEL = [
     "Fixture 102", "Fixture 602", "Fixture 701", "Fixture 802"
 ]
 
-# All Mistrals — all used for lightning
+# Mistrals EXCEPT the four lightning-sequence fixtures (103, 203, 503, 603)
+# and the always-off fixtures (303, 403). Only these two ever get ambient
+# atmosphere colours — the lightning fixtures are reserved for lightningE.
 ALL_MISTRAL = [
-    "Fixture 103", "Fixture 203", "Fixture 503", "Fixture 603", "Fixture 703", "Fixture 803"
+    "Fixture 703", "Fixture 803"
 ]
 
+# MagicBlade EXCEPT the spotlight fixture (304) and the always-off fixture (404)
 ALL_MAGICBLADE = [
     "Fixture 104", "Fixture 204", "Fixture 504", "Fixture 604", "Fixture 704", "Fixture 804"
 ]
 
-ALL_FIXTURES = ALL_EPAR + ALL_MINIPANEL + ["Fixture 202", "Fixture 502"] + ALL_MISTRAL + ALL_MAGICBLADE
-
-# Spotlights — MiniPanel 502 and 202. Positioning, colour, focus, etc. are
-# now handled entirely by the "spotlightE" sequence on the GMA3 — Python
-# just fires that sequence rather than setting individual attributes.
-SPOTLIGHT_A = "Fixture 502"
-SPOTLIGHT_B = "Fixture 202"
+# =================================================================
+# === SPOTLIGHT SEQUENCE ===
+# Fired once (init only) and left running — the script never touches
+# these fixtures again until game close, per design.
+# =================================================================
 SPOTLIGHT_SEQUENCE_NAME = "spotlightE"
+SPOTLIGHT_FIXTURES = ["Fixture 202", "Fixture 302", "Fixture 502", "Fixture 304"]
 
-
-# Lightning — ALL Mistrals
-FLASH_FIXTURES    = ALL_MISTRAL
-FLASH_DURATION_MS = 150
-
-# The "lightningE" sequence on the GMA3 handles these 4 Mistrals directly.
-# Any other Mistral (i.e. 703, 803) is forced off whenever lightning fires.
+# =================================================================
+# === LIGHTNING SEQUENCE ===
+# A single cue (position + brightness) triggered on, then off, each flash.
+# =================================================================
 LIGHTNING_SEQUENCE_NAME = "lightningE"
 LIGHTNING_SEQUENCE_FIXTURES = ["Fixture 103", "Fixture 203", "Fixture 503", "Fixture 603"]
-FLASH_OFF_FIXTURES = [fix for fix in ALL_MISTRAL if fix not in LIGHTNING_SEQUENCE_FIXTURES]
+FLASH_DURATION_MS = 150
+
+# General ambient Mistrals (703, 803) — forced off whenever lightning fires
+# so only the lightningE-driven fixtures are lit during the flash.
+FLASH_FIXTURES = ALL_MISTRAL
+
+# Every fixture this script is allowed to touch, for game-close shutdown only.
+# Always-off fixtures (301, 401, 402, 303, 403, 404) are intentionally absent.
+ALL_FIXTURES = (
+    ALL_EPAR + ALL_MINIPANEL + ALL_MISTRAL + ALL_MAGICBLADE
+    + SPOTLIGHT_FIXTURES + LIGHTNING_SEQUENCE_FIXTURES
+)
 
 # Decoy hit flash duration
 DECOY_FLASH_DURATION_MS = 350
@@ -87,8 +107,8 @@ BLUE_MIN,  BLUE_MAX  = 0, 255
 # during gameplay (started on_tutorial_start / on_thumbsup_accepted,
 # stopped on countdown / decoy-hit-safe / stage end / restart).
 # Mistrals are left untouched — they're reserved for lightning flashes.
-# Spotlights (502 / 202) are NOT touched by this — they're driven by the
-# "spotlightE" GMA3 sequence instead, fired once via _fire_spotlights().
+# Spotlight fixtures (202/302/502/304) are NOT touched by this — they're
+# driven entirely by the "spotlightE" GMA3 sequence, fired once at init().
 # =================================================================
 SEQUENCE_STEP_MS = 350  # how long each step holds before moving to the next
 
@@ -190,17 +210,18 @@ def _all_lights_off():
 
 def _fire_spotlights():
     """
-    Trigger the "spotlightE" sequence on the GMA3, which now handles the
-    spotlights' positioning, colour, focus, and zoom natively on the console.
-    Python no longer sets pan/tilt/colour/etc. on Fixture 502/202 directly.
+    Trigger the "spotlightE" sequence on the GMA3, which handles all 4
+    spotlight fixtures (MiniPanel 202/302/502, MagicBlade 304) natively.
+    Called ONCE at game init and never again until game close — the
+    spotlights are meant to stay on and untouched for the entire session.
     """
     _send(f"Go+ Sequence '{SPOTLIGHT_SEQUENCE_NAME}'")
 
-    # Fixture 601 turns on/color-cycles alongside the spotlights (console-side
-    # effect, not driven by this script) — force it off every time spotlights fire.
+    # Fixture 601 has previously mirrored the spotlights due to a console-side
+    # patch/group issue — force it off here as a one-time safety measure.
     _set_dimmer("Fixture 601", 0)
 
-    print(f"[LIGHTING] Spotlight sequence '{SPOTLIGHT_SEQUENCE_NAME}' triggered, Fixture 601 forced off")
+    print(f"[LIGHTING] Spotlight sequence '{SPOTLIGHT_SEQUENCE_NAME}' triggered (spotlights will stay on until game close)")
 
 
 def _stop_all_effects():
@@ -238,7 +259,7 @@ def _start_round_sequence():
 def _setup_spooky():
     """
     Dimmed spooky atmosphere. No pan/tilt — GMA3 controls Mistral positions.
-    Spotlights (502, 202) excluded — handled by _fire_spotlights().
+    Spotlight/lightning fixtures excluded — see fixture group comments at top of file.
 
     ePar:       deep red-maroon, very low
     MiniPanel:  dark pink/magenta, very dim (excludes spotlights)
@@ -298,7 +319,9 @@ def _setup_thumbsup():
 # === PUBLIC API ===
 # =================================================================
 def init():
-    """Call ONCE at game startup. Sets spooky atmosphere and fires spotlights."""
+    """Call ONCE at game startup. Sets spooky atmosphere and fires the spotlight
+    sequence — this is the ONLY place spotlights are triggered; they stay on
+    for the whole session until on_game_close()."""
     global _lightning_enabled, _flash_active
 
     _lightning_enabled = False
@@ -312,14 +335,14 @@ def init():
 
 def on_tutorial_start():
     """Call when tutorial begins or a new stage starts. Enables lightning,
-    clears effects, and kicks off the round chase/sweep sequence."""
+    clears effects, and kicks off the round chase/sweep sequence.
+    (Spotlights are not touched here — they stay on from init() onward.)"""
     global _lightning_enabled
 
     _lightning_enabled = True
     _stop_all_effects()
 
     _setup_spooky()
-    _fire_spotlights()
     _start_round_sequence()
     print("[LIGHTING] Tutorial/stage started — lightning enabled, sequence running.")
 
@@ -341,14 +364,14 @@ def on_thumbsup_check():
 
 
 def on_thumbsup_accepted():
-    """Call when thumbs up registered. Restore spooky, lightning on, sequence resumes."""
+    """Call when thumbs up registered. Restore spooky, lightning on, sequence resumes.
+    (Spotlights are not touched here — they stay on from init() onward.)"""
     global _lightning_enabled
 
     _lightning_enabled = True
     _stop_all_effects()
 
     _setup_spooky()
-    _fire_spotlights()
     _start_round_sequence()
     print("[LIGHTING] Thumbs up accepted — spooky restored, lightning + sequence on.")
 
@@ -372,7 +395,7 @@ def on_lightning_flash():
 
     _send(f"Go+ Sequence '{LIGHTNING_SEQUENCE_NAME}'")
 
-    for fix in FLASH_OFF_FIXTURES:
+    for fix in FLASH_FIXTURES:
         _set_dimmer(fix, 0)
 
     print("[LIGHTING] ⚡ Lightning ON!")
@@ -562,7 +585,8 @@ def on_lose():
 
 
 def on_game_restart():
-    """Call on K_r restart. Stops all effects, restores spooky + spotlights."""
+    """Call on K_r restart. Stops all effects, restores spooky atmosphere.
+    (Spotlights are not touched here — they stay on across restarts.)"""
     global _lightning_enabled, _flash_active
 
     _lightning_enabled = False
@@ -573,8 +597,7 @@ def on_game_restart():
         _set_dimmer(fix, 0)
 
     _setup_spooky()
-    _fire_spotlights()
-    print("[LIGHTING] Restarted — spooky + spotlights restored.")
+    print("[LIGHTING] Restarted — spooky restored.")
 
 
 def on_game_close():
@@ -644,7 +667,6 @@ def update():
                 _setup_countdown()
             else:
                 _setup_spooky()
-            _fire_spotlights()
             _decoy_flash_active = False
             print("[LIGHTING] Decoy flash over.")
 
