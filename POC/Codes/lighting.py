@@ -96,6 +96,11 @@ FLASH_FOCUS = 100
 WHITE_MIN, WHITE_MAX = 0, 100
 SPOTLIGHT_WHITE = 100
 
+# "Q" fader in the GMA3 colour picker — pushes the mix to pure white
+# regardless of R/G/B, same attribute family as ColorRGB_R/G/B.
+Q_MIN, Q_MAX = 0, 100
+SPOTLIGHT_Q = 100
+
 # Zoom range (for spotlights only). On most GMA3 profiles 0 = narrow/far
 # throw, max = wide/flood. Set to narrow so the beam reaches further.
 # If it comes out backwards on your rig, flip this to ZOOM_MAX.
@@ -225,6 +230,7 @@ def _fire_spotlights():
     _set_attribute(SPOTLIGHT_A, "tilt", SPOTLIGHT_A_TILT, TILT_MIN, TILT_MAX)
     _set_attribute(SPOTLIGHT_A, "White", SPOTLIGHT_WHITE, WHITE_MIN, WHITE_MAX)
     _set_attribute(SPOTLIGHT_A, "Zoom",  SPOTLIGHT_ZOOM,  ZOOM_MIN, ZOOM_MAX)
+    _set_attribute(SPOTLIGHT_A, "ColorRGB_Q", SPOTLIGHT_Q, Q_MIN, Q_MAX)
 
     _set_colour(SPOTLIGHT_B, 235, 255, 255)
     _set_dimmer(SPOTLIGHT_B, SPOTLIGHT_DIMMER)
@@ -232,6 +238,7 @@ def _fire_spotlights():
     _set_attribute(SPOTLIGHT_B, "tilt", SPOTLIGHT_B_TILT, TILT_MIN, TILT_MAX)
     _set_attribute(SPOTLIGHT_B, "White", SPOTLIGHT_WHITE, WHITE_MIN, WHITE_MAX)
     _set_attribute(SPOTLIGHT_B, "Zoom",  SPOTLIGHT_ZOOM,  ZOOM_MIN, ZOOM_MAX)
+    _set_attribute(SPOTLIGHT_B, "ColorRGB_Q", SPOTLIGHT_Q, Q_MIN, Q_MAX)
 
     # Fixture 601 turns on/color-cycles alongside the spotlights (console-side
     # effect, not driven by this script) — force it off every time spotlights fire.
