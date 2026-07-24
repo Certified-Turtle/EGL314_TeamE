@@ -160,3 +160,8 @@ flowchart TD
 1. Webcam (Built-in/ external)
 2. Laptop monitor/ External monitor
 3. Dome shaped objects painted in fluorescent acrylic green and blue.
+
+Currently, our team collaborated with other teams to create props that can be passed down from station to station. Our contribution is the green and blue shaped dome on the front of the blasters.
+
+![Phantom Blasters](Images/OpenCVBlaster.jpg)
+![Phantom Blasters](Images/OpenCVBlaster2.jpg)
