@@ -162,5 +162,5 @@ flowchart TD
 
 Currently, our team collaborated with other teams to create props that can be passed down from station to station. Our contribution is the green and blue shaped dome on the front of the blasters.
 
-![Phantom Blasters](Images/OpenCVBlaster.jpg)
-![Phantom Blasters](Images/OpenCVBlaster2.jpg)
+![Phantom Blasters](MVP/Documentation/Images/OpenCVBlaster.jpg)
+![Phantom Blasters](MVP/Documentation/Images/OpenCVBlaster2.jpg)
