@@ -10,7 +10,9 @@ An interactive game developed in python that integrates OpenCV and Mediapipe (Re
     - [1.2 Install this in your terminal] 
 - [2. Installing your dependencies]
     - [2.1 What each dependency does]
-- 3. 
+- [3. Game Files]
+    - [3.1 Game Flow]
+- Notes
 
 ## 1. Setup
 ---
@@ -52,7 +54,7 @@ python-osc==1.8.1
 pip install -r requirements.txt
 ```
 
-## Game Files
+## 3. Game Files
 | File | Description |
 | :--- | :--- |
 | `addons.py` | Handles secondary mechanics: Gesture loading bars, decoy logic, difficulty ramping. |
@@ -71,8 +73,8 @@ pip install -r requirements.txt
 | `tutorial.py` | Renders the instructional and tutorial logic for the game's startup menu | 
 | `webcam_test.py`| A standalone tool to verify webcam connectivity. |
 
-## Game flow
-# Whack-A-Ghost / Phantom Sweep — Architecture
+## 3.1 Game flow
+# Phantom Sweep — Architecture
 
 ```mermaid
 flowchart TD
