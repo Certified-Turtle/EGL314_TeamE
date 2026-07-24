@@ -150,7 +150,6 @@ flowchart TD
 - **`lighting.py`** and **`audio.py`** each open their **own direct OSC connection** to their hardware target (grandMA3 and REAPER respectively) rather than routing through a shared hub.
 - **`webcam_test.py`** is a standalone manual test script for verifying camera connectivity — it is not imported or called by `main.py`.
 - **`okhandsign.csv`** (referenced by `opencv.py` as `okhandsign.csv`) stores reference hand-landmark vectors used for OK-sign gesture matching.
-```
 
 
  ### [Click here to view the README for each .py file for more details](POC/Documentation/)
