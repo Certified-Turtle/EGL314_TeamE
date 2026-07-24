@@ -114,8 +114,13 @@ flowchart TD
         AUD[audio.py]
     end
 
-    GMA3[("grandMA3 Console")]
-    REAPER[("REAPER DAW")]
+    subgraph Hardware [" 🔊 Downstream Hardware / Software - outside game code "]
+        direction LR
+        GMA3[("grandMA3 Console")]
+        REAPER[("REAPER DAW")]
+        LISA[("L-ISA Processor")]
+        REAPER -->|"MIDI"| LISA
+    end
 
     MAIN --> CV
     MAIN --> GP
@@ -128,12 +133,13 @@ flowchart TD
     MAIN --> LIGHT
     MAIN --> AUD
 
-    LIGHT -->|"OSC direct"| GMA3
-    AUD -->|"OSC direct"| REAPER
+    LIGHT -->|"OSC"| GMA3
+    AUD -->|"MIDI"| REAPER
 
     style MAIN fill:#e879f9,stroke:#a21caf,color:#000,font-weight:bold
     style GMA3 fill:#1e293b,stroke:#64748b,color:#fff
     style REAPER fill:#1e293b,stroke:#64748b,color:#fff
+    style LISA fill:#1e293b,stroke:#64748b,color:#fff
 ```
 
 ## Notes
