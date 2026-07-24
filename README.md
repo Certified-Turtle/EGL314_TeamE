@@ -74,17 +74,43 @@ pip install -r requirements.txt
 ## Game flow
 ```mermaid
 graph TD
-    A[Launch Game] --> B[Initialization/Setup]
-    B --> C[Main Loop]
-    C --> D[UI/Designs]
-    C --> E[Gameplay]
-    C --> F[Audio/Lighting]
+    %% Entry Point
+    main["`main.py`"] -->|Uses| gameplay["`gameplay.py`"]
+    main -->|Uses| designs["`designs.py`"]
+    main -->|Uses| opencv["`opencv.py`"]
+    main -->|Uses| oscserver["`oscserver.py`"]
+
+    %% Menu and Startup Logic
+    main -->|Initializes| start_button["`start_button.py`"]
+    main -->|Renders tutorial| tutorial["`tutorial.py`"]
+
+    %% Core Mechanics and Systems
+    gameplay -->|Ramp/Decoys/Gestures| addons["`addons.py`"]
+    gameplay -->|Reads parameters| config["`config.py`"]
+    start_button -->|Reads settings| config
+    tutorial -->|Reads settings| config
+
+    %% Vision and Input Processing
+    opencv -->|Evaluates gestures| thumbsup["`thumbsup.csv`"]
+    opencv -.->|Verification tool| webcam_test["`webcam_test.py`"]
+
+    %% Visuals and Audio Output
+    designs -->|Draws elements| gameplay
+    oscserver -->|Forwards OSC to Audio| audio["`audio.py`"]
+    oscserver -->|Forwards OSC to Lighting| lighting["`lighting.py`"]
+
+    %% End Game State
+    gameplay -->|Triggers game-over| restart_quit["`restart_quit.py`"]
+
+    classDef pythonFile fill:#f9f,stroke:#333,stroke-width:2px;
+    class main,gameplay,designs,opencv,oscserver,start_button,tutorial,addons,config,thumbsup,webcam_test,audio,lighting,restart_quit pythonFile;
 ```
 
 
  ### [Click here to view the README for each .py file for more details](POC/Documentation/)
+ ### [Click here to view the README for the MVP documents](MVP/Documentation/)
 
 ## What you'll need:
 1. Webcam (Built-in/ external)
 2. Laptop monitor/ External monitor
-3. A bright green object, preferably a vibrant or neon green.
+3. Dome shaped objects painted in fluorescent acrylic green and blue.
