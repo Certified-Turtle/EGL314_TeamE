@@ -72,38 +72,77 @@ pip install -r requirements.txt
 | `webcam_test.py`| A standalone tool to verify webcam connectivity. |
 
 ## Game flow
+# Whack-A-Ghost / Phantom Sweep — Architecture
+
 ```mermaid
-graph TD
-    %% Entry Point
-    main["`main.py`"] -->|Uses| gameplay["`gameplay.py`"]
-    main -->|Uses| designs["`designs.py`"]
-    main -->|Uses| opencv["`opencv.py`"]
-    main -->|Uses| oscserver["`oscserver.py`"]
+flowchart TD
+    MAIN[main.py]
 
-    %% Menu and Startup Logic
-    main -->|Initializes| start_button["`start_button.py`"]
-    main -->|Renders tutorial| tutorial["`tutorial.py`"]
+    subgraph Vision [" 👁️ Computer Vision "]
+        direction TB
+        CV[opencv.py]
+        CSV[("okhandsign.csv")]
+        CV --> CSV
+    end
 
-    %% Core Mechanics and Systems
-    gameplay -->|Ramp/Decoys/Gestures| addons["`addons.py`"]
-    gameplay -->|Reads parameters| config["`config.py`"]
-    start_button -->|Reads settings| config
-    tutorial -->|Reads settings| config
+    subgraph Logic [" ⚙️ Game Logic "]
+        direction TB
+        GP[gameplay.py]
+        CFG[config.py]
+        ADD[addons.py]
+        RQ[restart_quit.py]
+        GP <--> CFG
+        ADD <--> CFG
+    end
 
-    %% Vision and Input Processing
-    opencv -->|Evaluates gestures| thumbsup["`thumbsup.csv`"]
-    opencv -.->|Verification tool| webcam_test["`webcam_test.py`"]
+    subgraph UI [" 🖥️ Phase Screens "]
+        direction TB
+        SB[start_button.py]
+        TUT[tutorial.py]
+    end
 
-    %% Visuals and Audio Output
-    designs -->|Draws elements| gameplay
-    oscserver -->|Forwards OSC to Audio| audio["`audio.py`"]
-    oscserver -->|Forwards OSC to Lighting| lighting["`lighting.py`"]
+    subgraph Render [" 🎨 Rendering "]
+        direction TB
+        DES[designs.py]
+        AST[assets.py]
+        DES --> AST
+    end
 
-    %% End Game State
-    gameplay -->|Triggers game-over| restart_quit["`restart_quit.py`"]
+    subgraph Show [" 💡 Show Control "]
+        direction TB
+        LIGHT[lighting.py]
+        AUD[audio.py]
+    end
 
-    classDef pythonFile fill:#f9f,stroke:#333,stroke-width:2px;
-    class main,gameplay,designs,opencv,oscserver,start_button,tutorial,addons,config,thumbsup,webcam_test,audio,lighting,restart_quit pythonFile;
+    GMA3[("grandMA3 Console")]
+    REAPER[("REAPER DAW")]
+
+    MAIN --> CV
+    MAIN --> GP
+    MAIN --> ADD
+    MAIN --> RQ
+    MAIN --> SB
+    MAIN --> TUT
+    MAIN --> DES
+    MAIN --> AST
+    MAIN --> LIGHT
+    MAIN --> AUD
+
+    LIGHT -->|"OSC direct"| GMA3
+    AUD -->|"OSC direct"| REAPER
+
+    style MAIN fill:#e879f9,stroke:#a21caf,color:#000,font-weight:bold
+    style GMA3 fill:#1e293b,stroke:#64748b,color:#fff
+    style REAPER fill:#1e293b,stroke:#64748b,color:#fff
+```
+
+## Notes
+
+- **`main.py`** is the single entry point and orchestrator — it owns the game loop, phase state machine, and calls into every active module every frame.
+- **`lighting.py`** and **`audio.py`** each open their **own direct OSC connection** to their hardware target (grandMA3 and REAPER respectively) rather than routing through a shared hub.
+- **`oscserver.py`** (`central_router.py`) was built as a central OSC router to forward traffic to REAPER / grandMA3 / LISA based on address pattern, but nothing in the current codebase sends messages to it — it's currently dead infrastructure from an earlier architecture.
+- **`webcam_test.py`** is a standalone manual test script for verifying camera connectivity — it is not imported or called by `main.py`.
+- **`thumbsup.csv`** (referenced by `opencv.py` as `okhandsign.csv`) stores reference hand-landmark vectors used for OK-sign gesture matching.
 ```
 
 
