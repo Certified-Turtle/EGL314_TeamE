@@ -1,6 +1,6 @@
 # EGL314
 ## Whack-A-Ghost OpenCV + MediaPipe Game (MVP)  
-An interactive game developed in python that integrates OpenCV and Mediapipe (Real time hand/colour tracking), GrandMA3 lighting fixtures and wall speakers via L-ISA and Reaper.
+An interactive game developed in python that integrates OpenCV and Mediapipe (Real time hand/colour tracking), GrandMA3 lighting fixtures and wall mounted speakers via L-ISA and Reaper.
 
 ---
 
@@ -17,7 +17,7 @@ An interactive game developed in python that integrates OpenCV and Mediapipe (Re
 ## 1. Setup
 ---
 ## 1.1 Create Conda environment
-The Conda environment acts as a dedicated workshop for our 'Whack-a-Ghost' game, ensuring that the specific versions of OpenCV, MediaPipe, and other tools you need are kept isolated so they don't crash or conflict with other projects on your computer.
+The Conda environment acts as a dedicated workshop for our 'Phantom Sweep' game, ensuring that the specific versions of OpenCV, MediaPipe, and other tools you need are kept isolated so they don't crash or conflict with other projects on your computer.
 
 ### 1.2 Install this in your terminal
 ```bash
@@ -148,9 +148,8 @@ flowchart TD
 
 - **`main.py`** is the single entry point and orchestrator — it owns the game loop, phase state machine, and calls into every active module every frame.
 - **`lighting.py`** and **`audio.py`** each open their **own direct OSC connection** to their hardware target (grandMA3 and REAPER respectively) rather than routing through a shared hub.
-- **`oscserver.py`** (`central_router.py`) was built as a central OSC router to forward traffic to REAPER / grandMA3 / LISA based on address pattern, but nothing in the current codebase sends messages to it — it's currently dead infrastructure from an earlier architecture.
 - **`webcam_test.py`** is a standalone manual test script for verifying camera connectivity — it is not imported or called by `main.py`.
-- **`thumbsup.csv`** (referenced by `opencv.py` as `okhandsign.csv`) stores reference hand-landmark vectors used for OK-sign gesture matching.
+- **`okhandsign.csv`** (referenced by `opencv.py` as `okhandsign.csv`) stores reference hand-landmark vectors used for OK-sign gesture matching.
 ```
 
 
