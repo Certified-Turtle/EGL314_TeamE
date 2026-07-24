@@ -58,18 +58,18 @@ pip install -r requirements.txt
 | File | Description |
 | :--- | :--- |
 | `addons.py` | Handles secondary mechanics: Gesture loading bars, decoy logic, difficulty ramping. |
-| `audio.py` | Bridges the game to REAPER via Open Sound Control (OSC) to trigger sounds and transport controls. |
+| `audio.py` | Bridges the game to REAPER and L-ISA via Open Sound Control (OSC) to trigger sounds and transport controls. |
 | `config.py` | The central hub where the game's settings, such as screen dimensions, colour codes and difficulty levels are stored. |
 | `designs.py` | The visual rendering engine; draws backgrounds, particles, character and UI elements. |
 | `gameplay.py` | Manages core game rules: hit detection, movement intervals, scoring and entity states.|
 | `lighting.py` | Acts as a DMX/GrandMA3 lighting controller, sending OSC commands for visual effects. |
 | `main.py` | This file contains the main .py file that uses each .py file to create the game. |
 | `opencv.py` | Processes webcam frames, handles colour tracking and evaluates hand gesture geometry |
-| `oscserver.py` | The "Central Router"; receives OSC from the game and forwards it to Audio/Lighting/Spatial systems. |
+| `okhandsign.csv` | Originally meant for thumbs up gestures but configured to recognise an OK sign for easier hand landmark recognition. |
+| `ok hand sign.png` | Image to show users what hand sign to hold out. |
 | `requirements.txt` | This file contains the dependencies mentioned earlier. |
 | `restart_quit.py` | Handles end-game state resets and renders the game-over result screen. |
 | `start_button.py`| Manages the interaction logic for the game's startup menu. |
-| `thumbsup.csv` | Originally meant for thumbs up gestures but configured to recognise an OK sign for easier hand landmark recognition. |
 | `tutorial.py` | Renders the instructional and tutorial logic for the game's startup menu | 
 | `webcam_test.py`| A standalone tool to verify webcam connectivity. |
 
