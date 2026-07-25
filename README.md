@@ -162,5 +162,12 @@ flowchart TD
 
 Currently, our team collaborated with other teams to create props that can be passed down from station to station. Our contribution is the green and blue shaped dome on the front of the blasters.
 
+Here is the STL file we used to 3d print the domes: 
+
 ![Phantom Blasters](MVP/Documentation/Images/OpenCVBlaster.jpg)
 ![Phantom Blasters](MVP/Documentation/Images/OpenCVBlaster2.jpg)
+
+
+## Connections to GrandMA3/Reaper + L-ISA
+
+xxx
