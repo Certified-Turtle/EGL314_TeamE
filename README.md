@@ -153,14 +153,14 @@ flowchart TD
 
 
  ### [Click here to view the README for each .py file for more details.](POC/Documentation/)
- ### [Click here to view the README for the MVP documents. All related files can be found here.](MVP/Documentation/)
+ ### [Click here to view the README for the MVP documents and .py files. All related files can be found here.](MVP/Documentation/)
 
 ## What you'll need:
 1. Webcam (Built-in/ external)
 2. Laptop monitor/ External monitor
 3. Dome shaped objects painted in fluorescent acrylic green and blue.
 
-Currently, our team collaborated with other teams to create props that can be passed down from station to station. Our contribution is the green and blue shaped dome on the front of the blasters.
+Currently, our team collaborated with other teams to create props that can be passed down from station to station. Our contribution is the green and blue shaped dome on the front of the blasters as seen below.
 
 ### [Click here to view the STL files for 3D printing](MVP/Documentation/Assets/)
 
