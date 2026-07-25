@@ -1,10 +1,10 @@
 # lighting.py
-# Handles all GMA3 OSC lighting control for Haunted Manor: Ghost Hunt
+# Handles all GMA3 OSC lighting control
 #
 # ─────────────────────────────────────────────────────────────────
 # FIXTURE OWNERSHIP MAP — what controls what:
 #
-#  SPOTLIGHT SEQUENCE ("spotlightE") — fired ONCE at init, never touched again:
+#  SPOTLIGHT SEQUENCE ("spotlightE") — fired ONCE at init, never touched again:dff
 #    MiniPanel 202, MiniPanel 302, MiniPanel 502, MagicBlade 304
 #
 #  GOBO SEQUENCE ("goboE") — wall decoration. ON ONLY while the game
