@@ -152,8 +152,8 @@ flowchart TD
 - **`okhandsign.csv`** (referenced by `opencv.py` as `okhandsign.csv`) stores reference hand-landmark vectors used for OK-sign gesture matching.
 
 
- ### [Click here to view the README for each .py file for more details](POC/Documentation/)
- ### [Click here to view the README for the MVP documents](MVP/Documentation/)
+ ### [Click here to view the README for each .py file for more details.](POC/Documentation/)
+ ### [Click here to view the README for the MVP documents. All related files can be found here.](MVP/Documentation/)
 
 ## What you'll need:
 1. Webcam (Built-in/ external)
@@ -162,7 +162,7 @@ flowchart TD
 
 Currently, our team collaborated with other teams to create props that can be passed down from station to station. Our contribution is the green and blue shaped dome on the front of the blasters.
 
-Here is the STL file we used to 3d print the domes: 
+### [Click here to view the STL files for 3D printing](MVP/Documentation/Assets/)
 
 ![Phantom Blasters](MVP/Documentation/Images/OpenCVBlaster.jpg)
 ![Phantom Blasters](MVP/Documentation/Images/OpenCVBlaster2.jpg)
