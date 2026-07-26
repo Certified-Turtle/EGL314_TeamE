@@ -1,7 +1,7 @@
 # main.py README
 ---
 
-### Synposis
+### Synposis of gameplay
 ---
 Our game is a twist on classic wack-a-mole. Using openCV, players control a cursor on screen using specific colours, running the cursor to kill ghost and rack up points.
 
