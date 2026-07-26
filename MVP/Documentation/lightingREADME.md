@@ -18,17 +18,7 @@ from pythonosc import udp_client
 | `import pygame` | Used only for its internal clock, `pygame.time.get_ticks()`. This lets the code track how much time has passed, so it can time things like a decoy-hit flash or a pulsing win effect. |
 | `from pythonosc import udp_client` | Sends short text commands over the network to the GMA3 console, which is the system that actually controls the physical lights. |
 
-## Section 1: Connection Address
-
-```bash
-GMA3_IP   = "192.168.254.252"
-GMA3_PORT = 8080
-GMA3_ADDR = "/gma3/cmd"
-```
-
-This is the network address of the lighting console. Every command sent by this file goes to this IP, port, and OSC channel. If the console moves to a different machine, this is the only place that needs to change.
-
-## Section 2: GMA3 Sequences & Fixture Ownership
+## Section 1: GMA3 Sequences & Fixture Ownership
 
 Rather than controlling every fixture attribute by hand, this file leans on two sequences programmed directly into the GMA3 console, and only reaches for individual fixture commands on the remaining fixtures it's responsible for.
 
@@ -48,7 +38,7 @@ There used to be a separate in-game lightning effect and a `LIGHTNING_SEQ`/`on_l
 
 The file also defines timing constants (e.g. `DECOY_FLASH_DURATION_MS = 350`) and valid ranges for RGB colour (e.g. `RED_MIN, RED_MAX = 0, 255`), so no command can send a value the hardware can't handle.
 
-## Section 3: Internal State Variables
+## Section 2: Internal State Variables
 
 ```bash
 _decoy_flash_active      = False
@@ -63,7 +53,7 @@ _gobo_active              = False
 
 These variables (and a handful of matching timer/step variables like `_stage_win_last_ms` or `_round_sequence_step`) track the current status of each effect across frames, since effects like a stage-win pulse or the round colour chase play out over time rather than instantly. `_gobo_active` specifically tracks whether the `goboE` sequence is currently running, so it's only ever started or stopped once rather than spammed every frame. The leading underscore marks all of these as private — meant to be used only within this file.
 
-## Section 4: Low-Level OSC Helpers
+## Section 3: Low-Level OSC Helpers
 
 ```bash
 def _send(message): ...
@@ -96,7 +86,7 @@ These functions handle sending commands and setting up atmospheres, and aren't c
 | `_stop_all_effects()` | Resets every effect's active flag back to `False` (win/lose pulses, countdown, decoy flash, round sequence) and stops `goboE` since the round sequence is ending. |
 | `_setup_spooky()` / `_setup_countdown()` / `_setup_thumbsup()` | Push a fixed colour/dimmer look onto the game-sequence fixtures (ePar, MiniPanel, MagicBlade) for each atmosphere: dim red spooky ambience, blood-red countdown, and full white for the gesture-check screen. |
 
-## Section 5: Public API
+## Section 4: Public API
 
 These are the functions `main.py` is meant to call directly.
 
@@ -116,7 +106,7 @@ These are the functions `main.py` is meant to call directly.
 | `on_game_close()` | Once, when the game exits. | Stops both `spotlightE` and `goboE`, and turns off every fixture this file knows about — the only place spotlights are ever switched off. |
 | `update()` | Every frame, in the main game loop. | Advances every timed effect below. |
 
-## Section 6: The `update()` Function
+## Section 5: The `update()` Function
 
 ```bash
 def update():

@@ -171,4 +171,13 @@ Currently, our team collaborated with other teams to create props that can be pa
 ## Connections to GrandMA3/Reaper + L-ISA
 
 ![GrandMA3 Connection](MVP/Documentation/Images/LightingOSC.jpg)
+
+```bash
+GMA3_IP   = "192.168.254.252"
+GMA3_PORT = 8080
+GMA3_ADDR = "/gma3/cmd"
+```
+
+This is the network address of the lighting console. Every command sent by this file goes to this IP, port, and OSC channel. If the console moves to a different machine, this is the only place that needs to change.
+
 xxx
