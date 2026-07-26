@@ -58,15 +58,15 @@ Now, we need to upload the ReaScript to get the command ID so that we can put it
 
 On your keyboard, press `Shift` and `?` at the same time, this window will appear. 
 
-reascript1
+![reascript1](https://github.com/Certified-Turtle/EGL314_TeamE/blob/main/MVP/Documentation/Images/reascript1.png)
 
 Next, click on `New Action`, and then `Load ReaScript...`
 
-reascript2
+![reascript2](https://github.com/Certified-Turtle/EGL314_TeamE/blob/main/MVP/Documentation/Images/reascript2.png)
 
 To find the Command ID, just search the ReaScript name, in this case `trackControl` at the top, right click on the command, and click on `Copy selected action command ID`
 
-reascript3
+![reascript3](https://github.com/Certified-Turtle/EGL314_TeamE/blob/main/MVP/Documentation/Images/reascript3.png)
 
 Now with the action command, you can complete the code line (replace the action with your own Command ID)
 
