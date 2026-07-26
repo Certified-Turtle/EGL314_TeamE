@@ -1,6 +1,11 @@
 # audio.py README
 
-
+## Table of Content
+| Section | Content |
+| :--- | :--- |
+| Section 1 | Creating a custom script for Reaper |
+| Section 2 | Uploading Script into Reaper |
+|||
 
 This code `audio.py` controls the audio effects for the ghost-hunting game
 
