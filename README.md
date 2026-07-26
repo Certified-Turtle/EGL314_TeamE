@@ -170,4 +170,5 @@ Currently, our team collaborated with other teams to create props that can be pa
 
 ## Connections to GrandMA3/Reaper + L-ISA
 
+![GrandMA3 Connection](MVP/Documentation/Images/LightingOSC.jpg)
 xxx
