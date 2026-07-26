@@ -1,5 +1,5 @@
 # EGL314
-## Whack-A-Ghost OpenCV + MediaPipe Game (MVP)  
+## Phantom Sweep OpenCV + MediaPipe Game (MVP)  
 An interactive game developed in python that integrates OpenCV and Mediapipe (Real time hand/colour tracking), GrandMA3 lighting fixtures and wall mounted speakers via L-ISA and Reaper.
 
 ---
