@@ -4,6 +4,7 @@ import random
 import sys
 import os
 import math
+import time
 
 # Import modularized components
 import designs
@@ -15,6 +16,9 @@ import restart_quit
 import addons 
 import config
 from pythonosc import udp_client
+import lighting
+import audio
+import assets
 
 # =================================================================
 # === 1. CONFIGURATION STAGE & PERFORMANCE CANVAS RESCALING ===
@@ -45,12 +49,13 @@ screen = pygame.Surface((WIDTH, HEIGHT))
 # Create a dedicated transparent scratchpad surface for the vortex death animations
 designs.vortex_scratch_surf = pygame.Surface((300, 150), pygame.SRCALPHA)
 
-pygame.display.set_caption("Haunted Manor: Ghost Hunt")
+pygame.display.set_caption("Training Simulation: Phantom Sweep")
 clock = pygame.time.Clock()
 
 active_entity_type = "GHOST"   # "GHOST" or "DECOY"
 
 designs.init_assets()
+assets.init_assets()
 
 ui_font = pygame.font.SysFont("Courier New", 36, bold=True)
 title_font = pygame.font.SysFont("Courier New", 68, bold=True)
@@ -59,8 +64,7 @@ countdown_font = pygame.font.SysFont("Courier New", 180, bold=True)
 # =================================================================
 # === 2. GAME STATE VARIABLE COMPARTMENTS ===
 # =================================================================
-PHASE_INTRO = -2
-PHASE_MODE_SELECT = -1   # Single/Multiplayer selection screen
+PHASE_INTRO = -1
 PHASE_TUTORIAL = 0
 PHASE_INSTRUCT = 1
 PHASE_PREPARE = 2
@@ -77,8 +81,8 @@ hover_start_progress = 0
 # === STAGE SYSTEM ===
 current_stage = 1                          # 1, 2, or 3
 STAGE_DURATION = 30                        # Seconds per stage
-STAGE_TARGETS = {1: 10, 2: 20, 3: 30}    # Score needed to pass each stage
-STAGE_SPEEDS = {1: 1300, 2: 750, 3: 450}  # Move interval ms — noticeably faster each stage
+STAGE_TARGETS = {1: 30, 2: 20, 3: 10}    # Score needed to pass each stage
+STAGE_SPEEDS = {1: 1300, 2: 750, 3: 250}  # Move interval ms — noticeably faster each stage
 stage_clear_hover = 0                      # Hover progress for stage clear button
 stage_passed = False                       # Whether player hit the target this stage
 
@@ -91,8 +95,7 @@ death_sequences = []
 AUDIO_LAPTOP_IP = "192.168.254.12" 
 audio_sender = udp_client.SimpleUDPClient(AUDIO_LAPTOP_IP, 9000) #Edit IP and port as needed
 
-LIGHTING_LAPTOP_IP = "192.168.254.252"
-lighting_sender = udp_client.SimpleUDPClient(LIGHTING_LAPTOP_IP, 9001) #Edit IP and port as needed
+# LIGHTING_LAPTOP_IP and lighting_sender removed — lighting.py manages its own connection
 
 total_ghosts_spawned = 0
 total_decoys_spawned = 0
@@ -100,7 +103,7 @@ total_decoys_spawned = 0
 show_debug_camera = True
 
 # === MULTIPLAYER STATE ===
-multiplayer_mode = False
+multiplayer_mode = True
 cursor_vector_p2 = pygame.math.Vector2(WIDTH // 2, HEIGHT // 2)
 velocity_vector_p2 = pygame.math.Vector2(0, 0)
 cursor_pos_p2 = [int(cursor_vector_p2.x), int(cursor_vector_p2.y)]
@@ -124,12 +127,29 @@ spawn_pool = [
     "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",   # Decoy 5 (Index 34)
     "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",   # Decoy 6 (Index 41)
     "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",   # Decoy 7 (Index 48)
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST",   # Clean Run to finish (49-55)
-    "GHOST"                                                          # Final element (56)
+    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",   # Clean Run to finish (49-55)
+    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY", 
+    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",
+    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",
+    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY", 
+    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY", 
+    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY", 
+    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY", 
+    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",
+    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",
+    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY", 
+    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY", 
+    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY", 
+    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       # Final element (56)
 ]
 pool_pointer = 0
 
 lightning_active, lightning_trigger_time, lightning_duration = False, 0, 0
+
+# === PAUSE STATE ===
+is_paused = False
+pause_start_time = 0
+pause_time_debt = 0
 
 cursor_vector = pygame.math.Vector2(WIDTH // 2, HEIGHT // 2)
 velocity_vector = pygame.math.Vector2(0, 0)
@@ -138,7 +158,7 @@ velocity_vector = pygame.math.Vector2(0, 0)
 cursor_pos = [int(cursor_vector.x), int(cursor_vector.y)]
 
 cap = None
-reference_ok_sign = None  # Holds data from thumbsup.csv
+reference_ok_sign = None  # Holds data from okhandsign.csv
 camera_fully_initialized = False
 camera_trigger_time = None  # CHANGED: Use None as an explicit "not started yet" state
 
@@ -165,35 +185,30 @@ while True:
         # Check for window exit events even while loading to prevent OS "Not Responding" hangs
         for event in pygame.event.get():
             if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
+                lighting.on_game_close()             # ← LIGHTING: all lights off before exit
                 pygame.quit(); sys.exit()
         
         # Once 1 second passes, safely inject the camera stream
         if now - camera_trigger_time > 1000:
             cap = opencv.init_camera()
-            reference_ok_sign = opencv.load_relational_gesture_csv("thumbsup.csv")
+            reference_ok_sign = opencv.load_relational_gesture_csv("okhandsign.csv")
             camera_fully_initialized = True
+            lighting.init()                          # ← LIGHTING: spooky atmosphere + spotlight on load
             last_move_time = pygame.time.get_ticks()
         
         clock.tick(60)
         continue  # Skip processing the rest of the loop until camera initialization finishes
     
-    # Atmospheric Lightning Engine Context
-    if lightning_active:
-        if now - lightning_trigger_time > lightning_duration: lightning_active = False
-    else:
-        if random.random() < (0.005 if time_left > 10 else 0.025):
-            lightning_active = True
-            lightning_trigger_time = now
-            lightning_duration = random.randint(80, 220)
+
 
     # Scenery routing mapping
     is_tutorial_scene = game_phase in [PHASE_TUTORIAL, PHASE_TUTORIAL_MP, PHASE_INSTRUCT, PHASE_PREPARE]
-    if game_phase in [PHASE_INTRO, PHASE_MODE_SELECT]:
+    if game_phase in [PHASE_INTRO]:
         screen.fill((10, 8, 20))
     elif game_phase == PHASE_STAGE_CLEAR:
         designs.draw_haunted_house(screen, lightning_active)
     elif is_tutorial_scene:
-        designs.draw_cemetery(screen, lightning_active)
+        designs.draw_library(screen, lightning_active)
     else:
         designs.draw_haunted_house(screen, lightning_active)
         
@@ -332,31 +347,54 @@ while True:
     # Pygame Native Event Loop Processing
     for event in pygame.event.get():
         if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
+            lighting.on_game_close()
             pygame.quit(); sys.exit()
-            
-        # === TOGGLE DETECTOR ===
+        
+    # === TOGGLE DETECTOR ===
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_c:  # Press 'C' to hide/show the live camera
                 show_debug_camera = not show_debug_camera
                 print(f"[UI] Debug camera window visibility set to: {show_debug_camera}")
 
-            # === MODE SELECTION (only active on the mode select screen) ===
-            if game_phase == PHASE_MODE_SELECT:
-                if event.key == pygame.K_s:
-                    multiplayer_mode = False
-                    game_phase = PHASE_TUTORIAL
-                    last_move_time = now
-                    print("[UI] Single player mode selected.")
-                elif event.key == pygame.K_m:
-                    multiplayer_mode = True
-                    mp_tracking_locked = False
-                    mp_ghost_timer_debt = 0
-                    game_phase = PHASE_TUTORIAL_MP
-                    last_move_time = now
-                    print("[UI] Multiplayer mode selected — P2 purple tracking active.")
+            if event.key == pygame.K_p:  # Press 'P' to pause/resume
+                if game_phase in [PHASE_TUTORIAL, PHASE_TUTORIAL_MP, PHASE_GAMEPLAY]:
+                    is_paused = not is_paused
+                    if is_paused:
+                        pause_start_time = now
+                        print("[PAUSE] Game paused.")
+                    else:
+                        elapsed_pause = now - pause_start_time
+                        start_ticks += elapsed_pause
+                        last_move_time += elapsed_pause
+                        print("[PAUSE] Game resumed.")
+            
+            # === DEBUG: STAGE SKIP BYPASS (LEFT = back, RIGHT = forward) ===
+            if event.key in (pygame.K_LEFT, pygame.K_RIGHT):
+                if game_phase in [PHASE_TUTORIAL, PHASE_TUTORIAL_MP, PHASE_INSTRUCT,
+                                  PHASE_PREPARE, PHASE_GAMEPLAY, PHASE_STAGE_CLEAR]:
+                    direction = 1 if event.key == pygame.K_RIGHT else -1
+                    new_stage = max(1, min(3, current_stage + direction))
+
+                    if new_stage != current_stage:
+                        current_stage = new_stage
+                        score = 0
+                        pool_pointer = 0
+                        ghost_state = "UP"
+                        ghost_y_offset = 0
+                        stage_clear_hover = 0
+                        stage_passed = False
+                        death_sequences = []
+                        start_ticks = now
+                        last_move_time = now
+                        game_phase = PHASE_GAMEPLAY
+                        lighting.on_tutorial_start()
+                        print(f"[DEBUG] Jumped to stage {current_stage} via hotkey.")
+
         
         if game_phase == PHASE_GAMEOVER and event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_q: pygame.quit(); sys.exit()
+            if event.key == pygame.K_q:
+                lighting.on_game_close()             # ← LIGHTING: all lights off before exit
+                pygame.quit(); sys.exit()
             if event.key == pygame.K_r: 
                 score, time_left, start_ticks, current_hole, _ = restart_quit.reset_game()
                 tutorial_count = 0; mp_tutorial_count = 0; game_phase = PHASE_INTRO; death_sequences = []
@@ -370,7 +408,7 @@ while True:
                 pool_pointer = 0
 
                 # === RESET MULTIPLAYER STATE ON RESTART ===
-                multiplayer_mode = False
+                multiplayer_mode = True
                 cursor_vector_p2 = pygame.math.Vector2(WIDTH // 2, HEIGHT // 2)
                 velocity_vector_p2 = pygame.math.Vector2(0, 0)
                 cursor_pos_p2[0] = WIDTH // 2
@@ -379,35 +417,26 @@ while True:
                 last_frame_pos_p2 = pygame.math.Vector2(WIDTH // 2, HEIGHT // 2)
                 mp_tracking_locked = False
                 mp_ghost_timer_debt = 0
+                lighting.on_game_restart()           # ← LIGHTING: restore spooky + spotlight
+
+    lighting.update()                                # ← LIGHTING: handles all timed effects every frame
 
     # Phase State Machine Routing Engine
     thumbs_up_active = False
     if game_phase == PHASE_INTRO:
-        hover_start_progress = start_button.handle_intro_phase(screen, title_font, ui_font, cursor_pos, hover_start_progress)
+        hover_start_progress = start_button.handle_intro_phase(screen, title_font, ui_font, cursor_pos, cursor_pos_p2, hover_start_progress)
         if hover_start_progress >= start_button.HOVER_TO_START_FRAMES:
-            game_phase = PHASE_MODE_SELECT
+            game_phase = PHASE_TUTORIAL_MP
             hover_start_progress = 0
             last_move_time = now
 
-    elif game_phase == PHASE_MODE_SELECT:
-        # === MODE SELECTION SCREEN: Press S for Single Player, M for Multiplayer ===
-        prompt_txt = title_font.render("CHOOSE YOUR MODE", True, (220, 200, 255))
-        prompt_rect = prompt_txt.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 140))
-        screen.blit(prompt_txt, prompt_rect)
-
-        single_txt = ui_font.render("PRESS  [S]  FOR SINGLE PLAYER", True, (0, 255, 120))
-        single_rect = single_txt.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 30))
-        screen.blit(single_txt, single_rect)
-
-        multi_txt = ui_font.render("PRESS  [M]  FOR MULTIPLAYER (GREEN + PURPLE)", True, (200, 100, 255))
-        multi_rect = multi_txt.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 40))
-        screen.blit(multi_txt, multi_rect)
-
     elif game_phase == PHASE_TUTORIAL and tutorial_count >= 5:
         game_phase = PHASE_INSTRUCT
+        lighting.on_thumbsup_check()                 # ← LIGHTING: calm white/blue for gesture
 
     elif game_phase == PHASE_TUTORIAL_MP and mp_tutorial_count >= 10:
         game_phase = PHASE_INSTRUCT
+        lighting.on_thumbsup_check()                 # ← LIGHTING: same for multiplayer path
         
     elif game_phase == PHASE_INSTRUCT:
         # 1. Broad Level Pipeline Check
@@ -432,19 +461,23 @@ while True:
                 config.gesture_hold_progress = 0  
                 game_phase = PHASE_PREPARE
                 ready_timer = now
+                lighting.on_thumbsup_accepted()      # ← LIGHTING: restore spooky, lightning on
         else:
             config.gesture_hold_progress = max(0, config.gesture_hold_progress - 2)
 
     elif game_phase == PHASE_PREPARE and (now - ready_timer) > 5000:
         game_phase = PHASE_GAMEPLAY
         start_ticks = now
+        lighting.on_tutorial_start()                 # ← LIGHTING: enable lightning for gameplay
 
     elif game_phase == PHASE_STAGE_CLEAR:
-        # Hover-to-continue button for stage clear screen
+    # Hover-to-continue button for stage clear screen
+    # Either P1 (green) or P2 (purple) crosshair can push the bar forward
+        p2_pos_for_hover = cursor_pos_p2 if multiplayer_mode else None
         stage_clear_hover = tutorial.handle_stage_clear_screen(
-            screen, ui_font, title_font, cursor_pos, score,
+            screen, ui_font, title_font, cursor_pos, p2_pos_for_hover, score,
             current_stage, stage_passed, STAGE_TARGETS, stage_clear_hover
-        )
+    )
         if stage_clear_hover >= tutorial.STAGE_HOVER_TARGET:
             current_stage += 1
             score = 0                # Reset score for the new stage
@@ -454,13 +487,14 @@ while True:
             stage_clear_hover = 0
             start_ticks = now
             game_phase = PHASE_GAMEPLAY
+            lighting.on_tutorial_start()             # ← LIGHTING: re-enable lightning for next stage
             print(f"[STAGE] Advancing to stage {current_stage}")
 
     # =================================================================
     # === GHOST HIT ENGINE & MOVEMENT MATRIX (STRICT VISIBILITY) ===
     # Skipped entirely while the multiplayer tracking lock is active.
     # =================================================================
-    if game_phase in [PHASE_TUTORIAL, PHASE_TUTORIAL_MP, PHASE_GAMEPLAY] and not mp_tracking_locked:
+    if game_phase in [PHASE_TUTORIAL, PHASE_TUTORIAL_MP, PHASE_GAMEPLAY] and not mp_tracking_locked and not is_paused:
         # 1. Run the Hit Engine Check (Forces clean integer values for pixel-perfect collision)
         int_cursor_pos = [int(cursor_vector.x), int(cursor_vector.y)]
         
@@ -474,6 +508,10 @@ while True:
         if hit and game_phase == PHASE_TUTORIAL_MP:
             mp_tutorial_count += 1
 
+        # Decoy hit — full room red flash
+        if hit and active_entity_type == "DECOY" and game_phase == PHASE_GAMEPLAY:
+            lighting.on_decoy_hit()
+
         # P2 hit check (purple object) — only if multiplayer on and P1 didn't already land a hit
         if multiplayer_mode and not hit:
             int_cursor_pos_p2 = [int(cursor_vector_p2.x), int(cursor_vector_p2.y)]
@@ -485,11 +523,17 @@ while True:
             # Increment combined MP tutorial counter if P2 landed a hit during MP training
             if p2_hit and game_phase == PHASE_TUTORIAL_MP:
                 mp_tutorial_count += 1
+
+            # P2 decoy hit
+            if p2_hit and active_entity_type == "DECOY" and game_phase == PHASE_GAMEPLAY:
+                lighting.on_decoy_hit()              # ← LIGHTING: same red flash for P2 decoy hit
         
         # 2. Match Timing & Stage Completion Check
         if game_phase == PHASE_GAMEPLAY:
             seconds_in_game = (now - start_ticks) // 1000
             time_left = max(0, STAGE_DURATION - seconds_in_game)
+
+            lighting.on_countdown(time_left)         # ← LIGHTING: handles 10s shift + per-second flash
 
             if time_left == 0:
                 # Stage time is up — check if target was met
@@ -497,9 +541,19 @@ while True:
                 if current_stage == 3:
                     # Final stage done — go to game over regardless
                     game_phase = PHASE_GAMEOVER
+                    if stage_passed:
+                        lighting.on_win()            # ← LIGHTING: final win amber gold
+                    else:
+                        lighting.on_lose()           # ← LIGHTING: final lose doom heartbeat
                 else:
                     game_phase = PHASE_STAGE_CLEAR
                     stage_clear_hover = 0
+                    if stage_passed:
+                        audio.win_pt()         # ← AUDIO: stage win sound effect
+                        lighting.on_stage_win(current_stage)   # ← LIGHTING: stage win dark gold
+                    else:
+                        audio.lose_pt()        # ← AUDIO: stage lose sound effect
+                        lighting.on_stage_lose(current_stage)  # ← LIGHTING: stage lose dark red
 
         # 3. Stage-Aware Move Interval & Positional Shifting
         # Stage 3 also enables decoys via the spawn pool
@@ -610,7 +664,7 @@ while True:
         elif not p1_visible:
             lost_label = "GREEN OBJECT LOST"
         else:
-            lost_label = "PURPLE OBJECT LOST"
+            lost_label = "BLUE OBJECT LOST"
 
         # Pulsing red banner — sine wave drives the alpha so it breathes urgently
         pulse_alpha = int(180 + math.sin(now * 0.008) * 60)
@@ -631,7 +685,7 @@ while True:
     # =================================================================
     # === LIVE CAMERA DEBUG WINDOW LAYER (BOTTOM LEFT CORNER) ===
     # =================================================================
-    if game_phase in [PHASE_INTRO, PHASE_MODE_SELECT, PHASE_TUTORIAL, PHASE_GAMEPLAY, PHASE_INSTRUCT] and rgb_frame is not None and show_debug_camera:
+    if game_phase in [PHASE_INTRO, PHASE_TUTORIAL, PHASE_TUTORIAL_MP, PHASE_GAMEPLAY, PHASE_INSTRUCT] and rgb_frame is not None and show_debug_camera:
         camera_surface = pygame.surfarray.make_surface(rgb_frame.swapaxes(0, 1))
         
         debug_w, debug_h = 320, 240
@@ -670,6 +724,8 @@ while True:
     # Scale the internal virtual surface to match native hardware window
     scaled_surface = pygame.transform.scale(screen, (NATIVE_WIDTH, NATIVE_HEIGHT))
     real_screen.blit(scaled_surface, (0, 0))
+    if is_paused:
+        designs.draw_pause_overlay(screen, title_font, ui_font)
 
     pygame.display.flip()
     clock.tick(60)
