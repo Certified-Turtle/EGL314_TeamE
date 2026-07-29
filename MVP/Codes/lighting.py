@@ -1,10 +1,15 @@
 # lighting.py
-# Handles all GMA3 OSC lighting control
+# Handles all GMA3 OSC lighting control for Haunted Manor: Ghost Hunt
 #
 # ─────────────────────────────────────────────────────────────────
 # FIXTURE OWNERSHIP MAP — what controls what:
 #
-#  SPOTLIGHT SEQUENCE ("spotlightE") — fired ONCE at init, never touched again:dff
+#  MAIN FACE LIGHTS ("mainfacelights") — fired ONCE at init, for the
+#  pre-game explanation phase. Turned off the moment on_intro_transition()
+#  is called and can NEVER turn on again after that.
+#
+#  SPOTLIGHT SEQUENCE ("spotlightE") — fired ONCE via on_intro_transition()
+#  (the intro-explain key press), never touched again until game close:
 #    MiniPanel 202, MiniPanel 302, MiniPanel 502, MagicBlade 304
 #
 #  GOBO SEQUENCE ("goboE") — wall decoration. ON ONLY while the game
@@ -41,8 +46,9 @@ GMA3_ADDR = "/gma3/cmd"
 # =================================================================
 # === SEQUENCE NAMES ===
 # =================================================================
-SPOTLIGHT_SEQ = "spotlightE"   # Fired once at init — stays on until game close
-GOBO_SEQ      = "goboE"        # Wall decor — ON only while game sequence is playing
+SPOTLIGHT_SEQ  = "spotlightE"    # Fired once, on intro transition — stays on until game close
+GOBO_SEQ       = "goboE"         # Wall decor — ON only while game sequence is playing
+MAIN_FACE_SEQ  = "mainfacelights" # Fired at init for the pre-game explanation, replaced by spotlightE
 
 # =================================================================
 # === GAME-SEQUENCE FIXTURE GROUPS ===
@@ -129,6 +135,9 @@ _round_sequence_step     = 0
 _round_sequence_last_ms  = 0
 
 _gobo_active              = False   # Tracks whether goboE is currently running
+
+_intro_lights_active     = False   # Tracks whether mainfacelights is currently on
+_intro_transitioned      = False   # Once True, mainfacelights can NEVER turn on again
 
 SEQUENCE_STEP_MS = 350
 ROUND_SEQUENCE = [
@@ -272,19 +281,48 @@ def _setup_thumbsup():
 def init():
     """
     Call ONCE at game startup.
-    - Fires the spotlight sequence (stays on until game close, never touched again)
+    - Fires the "mainfacelights" sequence for the pre-game explanation phase
     - Sets spooky atmosphere on game-sequence fixtures only
     - Does NOT touch the Mistrals - goboE only runs while the round sequence plays
+    - Does NOT fire spotlightE - that happens on_intro_transition() instead
     """
-    _stop_all_effects()
+    global _intro_lights_active, _intro_transitioned
 
-    # Fire spotlight sequence ONCE - it stays on for the whole session
-    _send(f'Go Sequence "{SPOTLIGHT_SEQ}" Cue 1')
-    print(f"[LIGHTING] Spotlight sequence '{SPOTLIGHT_SEQ}' fired - stays on until game close.")
+    _stop_all_effects()
+    _intro_lights_active = False
+    _intro_transitioned  = False
+
+    # Fire the explanation-phase sequence - replaced by spotlightE on_intro_transition()
+    _send(f'Go Sequence "{MAIN_FACE_SEQ}" Cue 1')
+    _intro_lights_active = True
+    print(f"[LIGHTING] '{MAIN_FACE_SEQ}' fired for the pre-game explanation.")
 
     # Set spooky on game-sequence fixtures only
     _setup_spooky()
     print("[LIGHTING] Initialised.")
+
+
+def on_intro_transition():
+    """
+    Call ONCE, when the team presses the key (e.g. 'O') after explaining the game.
+    Turns OFF "mainfacelights" and turns ON "spotlightE" for the rest of the session.
+    Safe to call more than once - after the first call, mainfacelights is locked off
+    and calling this again does nothing.
+    """
+    global _intro_lights_active, _intro_transitioned
+
+    if _intro_transitioned:
+        # Already transitioned - mainfacelights must never turn on again
+        return
+
+    _intro_transitioned = True
+
+    if _intro_lights_active:
+        _send(f'Off Sequence "{MAIN_FACE_SEQ}"')
+        _intro_lights_active = False
+
+    _send(f'Go Sequence "{SPOTLIGHT_SEQ}" Cue 1')
+    print(f"[LIGHTING] '{MAIN_FACE_SEQ}' OFF, '{SPOTLIGHT_SEQ}' ON - locked for rest of game.")
 
 
 def on_tutorial_start():
@@ -453,12 +491,14 @@ def on_game_restart():
 def on_game_close():
     """
     Called when the game exits.
-    Stops both GMA3 sequences and turns off all fixtures.
-    This is the ONLY place spotlights (and goboE) are turned off.
+    Stops all GMA3 sequences and turns off all fixtures.
+    This is the ONLY place spotlights (and goboE, and mainfacelights if it's
+    still running) are turned off.
     """
     # Stop GMA3 sequences
     _send(f'Off Sequence "{SPOTLIGHT_SEQ}"')
     _send(f'Off Sequence "{GOBO_SEQ}"')
+    _send(f'Off Sequence "{MAIN_FACE_SEQ}"')
 
     # Turn off all game-sequence fixtures
     for fix in GAME_FIXTURES:
