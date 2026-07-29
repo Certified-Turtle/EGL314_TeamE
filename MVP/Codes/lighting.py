@@ -1,36 +1,33 @@
 # lighting.py
-# Handles all GMA3 OSC lighting control for Haunted Manor: Ghost Hunt
+# Handles all GMA3 OSC lighting control
 #
 # ─────────────────────────────────────────────────────────────────
 # FIXTURE OWNERSHIP MAP — what controls what:
 #
-#  MAIN FACE LIGHTS ("mainfacelights") — fired ONCE at init, for the
-#  pre-game explanation phase. Turned off the moment on_intro_transition()
-#  is called and can NEVER turn on again after that.
+#  GAME SEQUENCE (atmosphere/effects — this script's normal loop):
+#    Fixture 702, Fixture 704, Fixture 802, Fixture 804
 #
-#  SPOTLIGHT SEQUENCE ("spotlightE") — fired ONCE via on_intro_transition()
-#  (the intro-explain key press), never touched again until game close:
-#    MiniPanel 202, MiniPanel 302, MiniPanel 502, MagicBlade 304
+#  WIN/LOSE EFFECTS — used ONLY by on_stage_win/on_stage_lose/on_win/on_lose,
+#  never touched by anything else (not spooky, not countdown, not decoy hit,
+#  not the round chase):
+#    Fixture 301, Fixture 401, Fixture 701, Fixture 801
+#
+#  SPOTLIGHT SEQUENCE ("spotlightE") — toggled by the 'O' key via
+#  on_spotlight_toggle(). Pressing it clears everything (round sequence,
+#  goboE, game-sequence fixtures) THEN fires spotlightE.
 #
 #  GOBO SEQUENCE ("goboE") — wall decoration. ON ONLY while the game
-#  sequence (round chase) is playing, OFF otherwise. This is the ONLY
-#  thing that ever touches the Mistrals — nothing else in this script
-#  sends commands to any Mistral fixture:
-#    Mistral 103, Mistral 203, Mistral 503, Mistral 603, Mistral 703, Mistral 803
+#  sequence (round chase) is playing, OFF otherwise.
 #
-#  LIGHTNING — REMOVED. No lightning sequence, no lightning fixtures,
-#  no on_lightning_flash(). Mistrals are fully owned by goboE now.
-#
-#  ALWAYS OFF — never sent any command, ever:
-#    ePar 301, ePar 401
-#    MiniPanel 402
-#    Mistral 303, Mistral 403
-#    MagicBlade 404
-#
-#  GAME SEQUENCE (atmosphere / effects — this script):
-#    ePar:       101, 201, 501, 601, 702, 801
-#    MiniPanel:  102, 602, 701, 802
-#    MagicBlade: 104, 204, 504, 604, 704, 804
+#  BOSS ENDGAME CASCADE — triggered once, when the ghost counter hits 8
+#  during round 3 (see trigger_boss_sequence()):
+#    1. Everything above (spotlightE, goboE, game-sequence fixtures,
+#       win/lose fixtures) turns off immediately.
+#    2. "Zone A" -> "Zone B" -> "Zone C" -> "Zone D" turn off one by one,
+#       1 second apart.
+#    3. One more second later, "BOSS MAN" turns on and STAYS ON —
+#       including after the game process exits. on_game_close() no
+#       longer clears any lights, specifically so BOSS MAN persists.
 # ─────────────────────────────────────────────────────────────────
 
 import pygame
@@ -46,45 +43,23 @@ GMA3_ADDR = "/gma3/cmd"
 # =================================================================
 # === SEQUENCE NAMES ===
 # =================================================================
-SPOTLIGHT_SEQ  = "spotlightE"    # Fired once, on intro transition — stays on until game close
-GOBO_SEQ       = "goboE"         # Wall decor — ON only while game sequence is playing
-MAIN_FACE_SEQ  = "mainfacelights" # Fired at init for the pre-game explanation, replaced by spotlightE
+SPOTLIGHT_SEQ = "spotlightE"
+GOBO_SEQ      = "goboE"
+ZONE_SEQS     = ["Zone A", "Zone B", "Zone C", "Zone D"]
+BOSS_SEQ      = "BOSS MAN"
 
 # =================================================================
-# === GAME-SEQUENCE FIXTURE GROUPS ===
-# Only these fixtures are ever touched by the game atmospheres/effects.
-# Mistrals are NOT here — they belong entirely to goboE.
+# === FIXTURE GROUPS ===
 # =================================================================
-ALL_EPAR = [
-    "Fixture 101", "Fixture 201",
-    "Fixture 501", "Fixture 601",
-    "Fixture 702", "Fixture 801"
-]
+# Game-sequence fixtures — spooky/countdown/decoy hit/round chase only
+GAME_FIXTURES = ["Fixture 702", "Fixture 704", "Fixture 802", "Fixture 804"]
 
-ALL_MINIPANEL = [
-    "Fixture 102",
-    "Fixture 602", "Fixture 701", "Fixture 802"
-]
+# Split into two alternating pairs for the round chase visual
+GROUP_1 = ["Fixture 702", "Fixture 704"]
+GROUP_2 = ["Fixture 802", "Fixture 804"]
 
-ALL_MAGICBLADE = [
-    "Fixture 104", "Fixture 204",
-    "Fixture 504", "Fixture 604",
-    "Fixture 704", "Fixture 804"
-]
-
-# All game-sequence fixtures — used only for game-close shutdown
-GAME_FIXTURES = ALL_EPAR + ALL_MINIPANEL + ALL_MAGICBLADE
-
-# Spotlight fixtures — owned by spotlightE, never touched by this script
-SPOTLIGHT_FIXTURES = [
-    "Fixture 202", "Fixture 302", "Fixture 502", "Fixture 304"
-]
-
-# Gobo/wall-decor fixtures — owned entirely by goboE. ALL 6 Mistrals.
-GOBO_FIXTURES = [
-    "Fixture 103", "Fixture 203", "Fixture 503",
-    "Fixture 603", "Fixture 703", "Fixture 803"
-]
+# Win/lose fixtures — used ONLY by the four win/lose functions below
+WIN_LOSE_FIXTURES = ["Fixture 301", "Fixture 401", "Fixture 701", "Fixture 801"]
 
 # =================================================================
 # === TIMING CONSTANTS ===
@@ -94,11 +69,21 @@ STAGE_WIN_PULSE_COUNT       = 4
 STAGE_WIN_PULSE_MS          = 200
 STAGE_LOSE_PULSE_MS         = 500
 COUNTDOWN_FLASH_DURATION_MS = 120
+SEQUENCE_STEP_MS            = 350
+BOSS_STEP_MS                = 1000   # 1 second between each zone/boss step
 
 # Colour ranges
 RED_MIN,   RED_MAX   = 0, 255
 GREEN_MIN, GREEN_MAX = 0, 255
 BLUE_MIN,  BLUE_MAX  = 0, 255
+
+# Round chase colours — pink/orange(yellow)/red only
+ROUND_SEQUENCE = [
+    {"group1": (220, 200, 0, 60),  "group2": (70, 20, 35, 20)},   # yellow on group 1
+    {"group1": (70, 20, 35, 20),   "group2": (220, 20, 100, 60)}, # pink on group 2
+    {"group1": (220, 0, 0, 60),    "group2": (70, 20, 35, 20)},   # red on group 1
+    {"group1": (70, 20, 35, 20),   "group2": (70, 20, 35, 20)},   # low breather
+]
 
 # =================================================================
 # === INTERNAL STATE ===
@@ -134,18 +119,12 @@ _round_sequence_active   = False
 _round_sequence_step     = 0
 _round_sequence_last_ms  = 0
 
-_gobo_active              = False   # Tracks whether goboE is currently running
+_gobo_active             = False
 
-_intro_lights_active     = False   # Tracks whether mainfacelights is currently on
-_intro_transitioned      = False   # Once True, mainfacelights can NEVER turn on again
-
-SEQUENCE_STEP_MS = 350
-ROUND_SEQUENCE = [
-    {"epar": (220, 200, 0, 40), "minipanel": (70, 20, 35, 12), "magicblade": (60, 10, 10, 12)},
-    {"epar": (60, 20, 10, 18), "minipanel": (220, 20, 100, 40), "magicblade": (60, 10, 10, 12)},
-    {"epar": (60, 20, 10, 18), "minipanel": (70, 20, 35, 12), "magicblade": (220, 0, 0, 42)},
-    {"epar": (60, 20, 10, 18), "minipanel": (70, 20, 35, 12), "magicblade": (60, 10, 10, 12)},
-]
+_boss_triggered          = False   # One-time guard — boss cascade only ever fires once per game
+_boss_sequence_active    = False   # True while the Zone A->B->C->D->BOSS MAN cascade is ticking
+_boss_step               = 0
+_boss_last_ms            = 0
 
 
 # =================================================================
@@ -188,26 +167,25 @@ def _set_group_colour(fixtures: list, r: int, g: int, b: int, dimmer: int):
 
 
 def _start_gobo_sequence():
-    """Turn on the goboE wall-decor sequence, only if not already running."""
     global _gobo_active
     if _gobo_active:
         return
     _gobo_active = True
     _send(f'Go Sequence "{GOBO_SEQ}" Cue 1')
-    print(f"[LIGHTING] Gobo sequence '{GOBO_SEQ}' ON - wall decor running.")
+    print(f"[LIGHTING] Gobo sequence '{GOBO_SEQ}' ON.")
 
 
 def _stop_gobo_sequence():
-    """Turn off the goboE wall-decor sequence, only if currently running."""
     global _gobo_active
     if not _gobo_active:
         return
     _gobo_active = False
     _send(f'Off Sequence "{GOBO_SEQ}"')
-    print(f"[LIGHTING] Gobo sequence '{GOBO_SEQ}' OFF - wall decor stopped.")
+    print(f"[LIGHTING] Gobo sequence '{GOBO_SEQ}' OFF.")
 
 
 def _stop_all_effects():
+    """Resets every routine effect flag. Does NOT touch the boss cascade state."""
     global _stage_win_active, _stage_lose_active
     global _final_win_active, _final_lose_active
     global _decoy_flash_active, _countdown_triggered
@@ -225,7 +203,6 @@ def _stop_all_effects():
     _last_countdown_second  = -1
     _round_sequence_active  = False
 
-    # Game sequence is stopping - gobo (wall decor) stops with it
     _stop_gobo_sequence()
 
 
@@ -234,44 +211,28 @@ def _start_round_sequence():
     _round_sequence_active  = True
     _round_sequence_step    = 0
     _round_sequence_last_ms = pygame.time.get_ticks()
-
-    # Game sequence is starting - gobo (wall decor) starts with it
     _start_gobo_sequence()
-
     print("[LIGHTING] Round sequence started.")
 
 
 # =================================================================
-# === ATMOSPHERE SETUPS (game-sequence fixtures only - no Mistral) ===
+# === ATMOSPHERE SETUPS (game-sequence fixtures only) ===
 # =================================================================
 def _setup_spooky():
-    for fix in ALL_EPAR:
-        _set_colour(fix, 90, 20, 20);   _set_dimmer(fix, 45)
-    for fix in ALL_MINIPANEL:
-        _set_colour(fix, 100, 20, 55);  _set_dimmer(fix, 38)
-    for fix in ALL_MAGICBLADE:
-        _set_colour(fix, 90, 20, 20);   _set_dimmer(fix, 38)
+    for fix in GAME_FIXTURES:
+        _set_colour(fix, 90, 20, 20); _set_dimmer(fix, 45)
     print("[LIGHTING] Spooky atmosphere set.")
 
 
 def _setup_countdown():
-    for fix in ALL_EPAR:
-        _set_colour(fix, 120, 0, 0);    _set_dimmer(fix, 60)
-    for fix in ALL_MINIPANEL:
-        _set_colour(fix, 100, 0, 0);    _set_dimmer(fix, 55)
-    for fix in ALL_MAGICBLADE:
-        _set_colour(fix, 150, 0, 0);    _set_dimmer(fix, 55)
+    for fix in GAME_FIXTURES:
+        _set_colour(fix, 150, 0, 0); _set_dimmer(fix, 60)
     print("[LIGHTING] Countdown atmosphere - blood red.")
 
 
 def _setup_thumbsup():
-    """Pure white for gesture reading. Spotlight and gobo/Mistral fixtures untouched."""
-    for fix in ALL_EPAR:
-        _set_colour(fix, 255, 255, 255); _set_dimmer(fix, 80)
-    for fix in ALL_MINIPANEL:
+    for fix in GAME_FIXTURES:
         _set_colour(fix, 255, 255, 255); _set_dimmer(fix, 75)
-    for fix in ALL_MAGICBLADE:
-        _set_colour(fix, 255, 255, 255); _set_dimmer(fix, 70)
     print("[LIGHTING] Thumbs up atmosphere - full white.")
 
 
@@ -281,54 +242,40 @@ def _setup_thumbsup():
 def init():
     """
     Call ONCE at game startup.
-    - Fires the "mainfacelights" sequence for the pre-game explanation phase
-    - Sets spooky atmosphere on game-sequence fixtures only
-    - Does NOT touch the Mistrals - goboE only runs while the round sequence plays
-    - Does NOT fire spotlightE - that happens on_intro_transition() instead
+    - Resets all effect state, including the boss cascade guard for a fresh session
+    - Sets spooky atmosphere on the 4 game-sequence fixtures only
+    - Does NOT fire spotlightE (only 'O' does that) or goboE (only the round
+      sequence does that)
     """
-    global _intro_lights_active, _intro_transitioned
+    global _boss_triggered, _boss_sequence_active, _boss_step
 
     _stop_all_effects()
-    _intro_lights_active = False
-    _intro_transitioned  = False
+    _boss_triggered       = False
+    _boss_sequence_active = False
+    _boss_step            = 0
 
-    # Fire the explanation-phase sequence - replaced by spotlightE on_intro_transition()
-    _send(f'Go Sequence "{MAIN_FACE_SEQ}" Cue 1')
-    _intro_lights_active = True
-    print(f"[LIGHTING] '{MAIN_FACE_SEQ}' fired for the pre-game explanation.")
-
-    # Set spooky on game-sequence fixtures only
     _setup_spooky()
     print("[LIGHTING] Initialised.")
 
 
-def on_intro_transition():
+def on_spotlight_toggle():
     """
-    Call ONCE, when the team presses the key (e.g. 'O') after explaining the game.
-    Turns OFF "mainfacelights" and turns ON "spotlightE" for the rest of the session.
-    Safe to call more than once - after the first call, mainfacelights is locked off
-    and calling this again does nothing.
+    Call when 'O' is pressed.
+    Clears everything (round sequence, goboE, game-sequence fixtures) THEN
+    fires spotlightE. Does not touch win/lose fixtures, zones, or BOSS MAN.
     """
-    global _intro_lights_active, _intro_transitioned
+    _stop_all_effects()
 
-    if _intro_transitioned:
-        # Already transitioned - mainfacelights must never turn on again
-        return
-
-    _intro_transitioned = True
-
-    if _intro_lights_active:
-        _send(f'Off Sequence "{MAIN_FACE_SEQ}"')
-        _intro_lights_active = False
+    for fix in GAME_FIXTURES:
+        _set_dimmer(fix, 0)
 
     _send(f'Go Sequence "{SPOTLIGHT_SEQ}" Cue 1')
-    print(f"[LIGHTING] '{MAIN_FACE_SEQ}' OFF, '{SPOTLIGHT_SEQ}' ON - locked for rest of game.")
+    print(f"[LIGHTING] Cleared everything - '{SPOTLIGHT_SEQ}' ON.")
 
 
 def on_tutorial_start():
     """Tutorial begins or new stage starts. Starts round sequence (and goboE with it)."""
     _stop_all_effects()
-
     _setup_spooky()
     _start_round_sequence()
     print("[LIGHTING] Tutorial/stage started.")
@@ -339,7 +286,6 @@ def on_thumbsup_check():
     global _round_sequence_active
     _round_sequence_active = False
     _stop_gobo_sequence()
-
     _setup_thumbsup()
     print("[LIGHTING] Thumbs up check - full white.")
 
@@ -347,14 +293,13 @@ def on_thumbsup_check():
 def on_thumbsup_accepted():
     """Thumbs up registered. Restore spooky, round sequence (and goboE) resumes."""
     _stop_all_effects()
-
     _setup_spooky()
     _start_round_sequence()
-    print("[LIGHTING] Thumbs up accepted - spooky + round sequence restored.")
+    print("[LIGHTING] Thumbs up accepted.")
 
 
 def on_decoy_hit():
-    """Player hits a decoy. Full room red slam on game-sequence fixtures only."""
+    """Player hits a decoy. Red slam on game-sequence fixtures only."""
     global _decoy_flash_active, _decoy_flash_trigger_ms
 
     if _decoy_flash_active:
@@ -363,19 +308,15 @@ def on_decoy_hit():
     _decoy_flash_active     = True
     _decoy_flash_trigger_ms = pygame.time.get_ticks()
 
-    for fix in ALL_EPAR:
-        _set_colour(fix, 220, 0, 0);    _set_dimmer(fix, 90)
-    for fix in ALL_MINIPANEL:
-        _set_colour(fix, 200, 0, 0);    _set_dimmer(fix, 85)
-    for fix in ALL_MAGICBLADE:
-        _set_colour(fix, 220, 0, 0);    _set_dimmer(fix, 80)
+    for fix in GAME_FIXTURES:
+        _set_colour(fix, 220, 0, 0); _set_dimmer(fix, 90)
 
     print("[LIGHTING] DECOY HIT - red slam!")
 
 
 def on_countdown(time_left: int):
-    """Call every frame during gameplay. Handles red shift at 10s and per-second flash.
-    Stops the round sequence (and goboE) when countdown begins."""
+    """Call every frame during gameplay. Red shift at 10s (stops round sequence/goboE),
+    plus a brighter flash each second."""
     global _countdown_triggered, _in_countdown
     global _countdown_flash_active, _countdown_flash_ms, _last_countdown_second
     global _round_sequence_active
@@ -394,26 +335,20 @@ def on_countdown(time_left: int):
             _countdown_flash_active = True
             _countdown_flash_ms     = pygame.time.get_ticks()
 
-            for fix in ALL_EPAR:
-                _set_colour(fix, 240, 0, 0);    _set_dimmer(fix, 100)
-            for fix in ALL_MINIPANEL:
-                _set_colour(fix, 220, 0, 0);    _set_dimmer(fix, 95)
+            for fix in GAME_FIXTURES:
+                _set_colour(fix, 240, 0, 0); _set_dimmer(fix, 100)
 
             print(f"[LIGHTING] Countdown flash - {time_left}s!")
 
 
 def on_stage_win(stage: int):
-    """Stage 1 or 2 cleared. Gold pulse on game-sequence fixtures."""
+    """Stage 1 or 2 cleared. Gold pulse on win/lose fixtures ONLY."""
     global _stage_win_active, _stage_win_step, _stage_win_on, _stage_win_last_ms
 
     _stop_all_effects()
 
-    for fix in ALL_EPAR:
-        _set_colour(fix, 20, 15, 0);    _set_dimmer(fix, 10)
-    for fix in ALL_MINIPANEL:
-        _set_colour(fix, 140, 110, 0);  _set_dimmer(fix, 65)
-    for fix in ALL_MAGICBLADE:
-        _set_colour(fix, 160, 120, 0);  _set_dimmer(fix, 75)
+    for fix in WIN_LOSE_FIXTURES:
+        _set_colour(fix, 160, 120, 0); _set_dimmer(fix, 75)
 
     _stage_win_active  = True
     _stage_win_step    = 0
@@ -423,17 +358,13 @@ def on_stage_win(stage: int):
 
 
 def on_stage_lose(stage: int):
-    """Stage 1 or 2 failed. Dark red slow pulse."""
+    """Stage 1 or 2 failed. Dark red slow pulse on win/lose fixtures ONLY."""
     global _stage_lose_active, _stage_lose_on, _stage_lose_last_ms
 
     _stop_all_effects()
 
-    for fix in ALL_EPAR:
-        _set_colour(fix, 70, 0, 0);     _set_dimmer(fix, 35)
-    for fix in ALL_MINIPANEL:
-        _set_colour(fix, 60, 0, 0);     _set_dimmer(fix, 30)
-    for fix in ALL_MAGICBLADE:
-        _set_colour(fix, 100, 0, 0);    _set_dimmer(fix, 38)
+    for fix in WIN_LOSE_FIXTURES:
+        _set_colour(fix, 90, 0, 0); _set_dimmer(fix, 38)
 
     _stage_lose_active  = True
     _stage_lose_on      = True
@@ -442,17 +373,13 @@ def on_stage_lose(stage: int):
 
 
 def on_win():
-    """Final win after stage 3. Bright amber gold pulse."""
+    """Final win after stage 3. Bright amber gold pulse on win/lose fixtures ONLY."""
     global _final_win_active, _final_win_step, _final_win_on, _final_win_last_ms
 
     _stop_all_effects()
 
-    for fix in ALL_EPAR:
-        _set_dimmer(fix, 0)
-    for fix in ALL_MINIPANEL:
-        _set_colour(fix, 180, 120, 0);  _set_dimmer(fix, 85)
-    for fix in ALL_MAGICBLADE:
-        _set_colour(fix, 200, 130, 0);  _set_dimmer(fix, 85)
+    for fix in WIN_LOSE_FIXTURES:
+        _set_colour(fix, 200, 130, 0); _set_dimmer(fix, 85)
 
     _final_win_active  = True
     _final_win_step    = 0
@@ -462,17 +389,13 @@ def on_win():
 
 
 def on_lose():
-    """Final lose after stage 3. Dark red everywhere, MagicBlade heartbeat."""
+    """Final lose after stage 3. Dark red heartbeat on win/lose fixtures ONLY."""
     global _final_lose_active, _final_lose_on, _final_lose_last_ms
 
     _stop_all_effects()
 
-    for fix in ALL_EPAR:
-        _set_colour(fix, 60, 0, 0);     _set_dimmer(fix, 28)
-    for fix in ALL_MINIPANEL:
-        _set_colour(fix, 50, 0, 0);     _set_dimmer(fix, 22)
-    for fix in ALL_MAGICBLADE:
-        _set_colour(fix, 90, 0, 0);     _set_dimmer(fix, 32)
+    for fix in WIN_LOSE_FIXTURES:
+        _set_colour(fix, 90, 0, 0); _set_dimmer(fix, 32)
 
     _final_lose_active  = True
     _final_lose_on      = True
@@ -481,34 +404,60 @@ def on_lose():
 
 
 def on_game_restart():
-    """K_r restart. Clears effects, restores spooky. Spotlights untouched, goboE stops."""
+    """K_r restart. Clears routine effects, restores spooky, re-arms the boss trigger."""
+    global _boss_triggered, _boss_sequence_active, _boss_step
+
     _stop_all_effects()
+    _boss_triggered       = False
+    _boss_sequence_active = False
+    _boss_step            = 0
 
     _setup_spooky()
-    print("[LIGHTING] Restarted - spooky restored. Spotlights still on.")
+    print("[LIGHTING] Restarted - spooky restored, boss trigger re-armed.")
+
+
+def trigger_boss_sequence():
+    """
+    Call ONCE, when the ghost counter hits 8 during round 3.
+    Safe to call more than once - after the first call this does nothing.
+
+    1. Turns off spotlightE, goboE, game-sequence fixtures, and win/lose fixtures.
+    2. Turns off Zone A immediately, then Zone B/C/D one at a time, 1 second apart.
+    3. One more second after Zone D, fires BOSS MAN - which stays on permanently,
+       including after the game process exits (on_game_close() no longer clears it).
+    """
+    global _boss_triggered, _boss_sequence_active, _boss_step, _boss_last_ms
+
+    if _boss_triggered:
+        return
+    _boss_triggered = True
+
+    # 1. Everything mentioned above, off
+    _stop_all_effects()
+    _send(f'Off Sequence "{SPOTLIGHT_SEQ}"')
+
+    for fix in GAME_FIXTURES:
+        _set_dimmer(fix, 0)
+    for fix in WIN_LOSE_FIXTURES:
+        _set_dimmer(fix, 0)
+
+    # 2. Zone A off immediately, B/C/D handled in update() at 1s intervals
+    _send(f'Off Sequence "{ZONE_SEQS[0]}"')
+
+    _boss_sequence_active = True
+    _boss_step            = 0
+    _boss_last_ms          = pygame.time.get_ticks()
+
+    print("[LIGHTING] BOSS TRIGGER - all lights off, Zone A down, cascade starting.")
 
 
 def on_game_close():
     """
     Called when the game exits.
-    Stops all GMA3 sequences and turns off all fixtures.
-    This is the ONLY place spotlights (and goboE, and mainfacelights if it's
-    still running) are turned off.
+    Intentionally does NOT turn anything off - BOSS MAN (and whatever else is
+    running) must persist after the game process ends.
     """
-    # Stop GMA3 sequences
-    _send(f'Off Sequence "{SPOTLIGHT_SEQ}"')
-    _send(f'Off Sequence "{GOBO_SEQ}"')
-    _send(f'Off Sequence "{MAIN_FACE_SEQ}"')
-
-    # Turn off all game-sequence fixtures
-    for fix in GAME_FIXTURES:
-        _send(f"{fix} At 0")
-
-    # Also turn off spotlight and gobo/Mistral fixtures explicitly
-    for fix in SPOTLIGHT_FIXTURES + GOBO_FIXTURES:
-        _send(f"{fix} At 0")
-
-    print("[LIGHTING] Game closed - all lights off.")
+    print("[LIGHTING] Game closed - lights intentionally left as-is (BOSS MAN persists).")
 
 
 def update():
@@ -520,6 +469,7 @@ def update():
       - Round chase sequence
       - Stage win/lose pulses
       - Final win/lose pulses
+      - Boss cascade (Zone B/C/D off, then BOSS MAN on)
     """
     global _decoy_flash_active
     global _countdown_flash_active
@@ -528,6 +478,7 @@ def update():
     global _final_win_active, _final_win_step, _final_win_on, _final_win_last_ms
     global _final_lose_active, _final_lose_on, _final_lose_last_ms
     global _round_sequence_active, _round_sequence_step, _round_sequence_last_ms
+    global _boss_sequence_active, _boss_step, _boss_last_ms
 
     now = pygame.time.get_ticks()
 
@@ -544,10 +495,8 @@ def update():
     # --- Countdown per-second flash cutoff ---
     if _countdown_flash_active:
         if now - _countdown_flash_ms > COUNTDOWN_FLASH_DURATION_MS:
-            for fix in ALL_EPAR:
-                _set_colour(fix, 120, 0, 0);    _set_dimmer(fix, 60)
-            for fix in ALL_MINIPANEL:
-                _set_colour(fix, 100, 0, 0);    _set_dimmer(fix, 55)
+            for fix in GAME_FIXTURES:
+                _set_colour(fix, 150, 0, 0); _set_dimmer(fix, 60)
             _countdown_flash_active = False
 
     # --- Round chase sequence ---
@@ -556,47 +505,38 @@ def update():
             _round_sequence_step    = (_round_sequence_step + 1) % len(ROUND_SEQUENCE)
             _round_sequence_last_ms = now
             step = ROUND_SEQUENCE[_round_sequence_step]
-            er, eg, eb, ed = step["epar"]
-            for fix in ALL_EPAR:
-                _set_colour(fix, er, eg, eb); _set_dimmer(fix, ed)
-            mr, mg, mb, md = step["minipanel"]
-            for fix in ALL_MINIPANEL:
-                _set_colour(fix, mr, mg, mb); _set_dimmer(fix, md)
-            gr, gg, gb, gd = step["magicblade"]
-            for fix in ALL_MAGICBLADE:
-                _set_colour(fix, gr, gg, gb); _set_dimmer(fix, gd)
+            r1, g1, b1, d1 = step["group1"]
+            for fix in GROUP_1:
+                _set_colour(fix, r1, g1, b1); _set_dimmer(fix, d1)
+            r2, g2, b2, d2 = step["group2"]
+            for fix in GROUP_2:
+                _set_colour(fix, r2, g2, b2); _set_dimmer(fix, d2)
 
     # --- Stage win gold pulse ---
     if _stage_win_active:
         if now - _stage_win_last_ms >= STAGE_WIN_PULSE_MS:
             _stage_win_on = not _stage_win_on
             if _stage_win_on:
-                for fix in ALL_MINIPANEL:
-                    _set_colour(fix, 140, 110, 0);  _set_dimmer(fix, 65)
-                for fix in ALL_MAGICBLADE:
-                    _set_colour(fix, 160, 120, 0);  _set_dimmer(fix, 75)
+                for fix in WIN_LOSE_FIXTURES:
+                    _set_colour(fix, 160, 120, 0); _set_dimmer(fix, 75)
             else:
-                for fix in ALL_MINIPANEL:
-                    _set_colour(fix, 60, 45, 0);    _set_dimmer(fix, 25)
-                for fix in ALL_MAGICBLADE:
-                    _set_colour(fix, 75, 50, 0);    _set_dimmer(fix, 28)
+                for fix in WIN_LOSE_FIXTURES:
+                    _set_colour(fix, 70, 50, 0);   _set_dimmer(fix, 28)
             _stage_win_step    += 1
             _stage_win_last_ms  = now
             if _stage_win_step >= STAGE_WIN_PULSE_COUNT * 2:
                 _stage_win_active = False
-                for fix in ALL_MINIPANEL:
-                    _set_colour(fix, 90, 65, 0);    _set_dimmer(fix, 38)
-                for fix in ALL_MAGICBLADE:
-                    _set_colour(fix, 100, 70, 0);   _set_dimmer(fix, 40)
+                for fix in WIN_LOSE_FIXTURES:
+                    _set_colour(fix, 100, 70, 0); _set_dimmer(fix, 40)
                 print("[LIGHTING] Stage win pulse complete.")
 
     # --- Stage lose slow red pulse ---
     if _stage_lose_active:
         if now - _stage_lose_last_ms >= STAGE_LOSE_PULSE_MS:
             _stage_lose_on = not _stage_lose_on
-            dimmer = 60 if _stage_lose_on else 15
-            for fix in ALL_MAGICBLADE:
-                _set_colour(fix, 100, 0, 0);    _set_dimmer(fix, dimmer)
+            dimmer = 55 if _stage_lose_on else 15
+            for fix in WIN_LOSE_FIXTURES:
+                _set_colour(fix, 100, 0, 0); _set_dimmer(fix, dimmer)
             _stage_lose_last_ms = now
 
     # --- Final win amber gold pulse ---
@@ -604,30 +544,47 @@ def update():
         if now - _final_win_last_ms >= 300:
             _final_win_on = not _final_win_on
             if _final_win_on:
-                for fix in ALL_MINIPANEL:
-                    _set_colour(fix, 180, 120, 0);  _set_dimmer(fix, 85)
-                for fix in ALL_MAGICBLADE:
-                    _set_colour(fix, 200, 130, 0);  _set_dimmer(fix, 85)
+                for fix in WIN_LOSE_FIXTURES:
+                    _set_colour(fix, 200, 130, 0); _set_dimmer(fix, 85)
             else:
-                for fix in ALL_MINIPANEL:
-                    _set_colour(fix, 90, 60, 0);    _set_dimmer(fix, 40)
-                for fix in ALL_MAGICBLADE:
-                    _set_colour(fix, 100, 65, 0);   _set_dimmer(fix, 38)
+                for fix in WIN_LOSE_FIXTURES:
+                    _set_colour(fix, 100, 65, 0);  _set_dimmer(fix, 38)
             _final_win_step    += 1
             _final_win_last_ms  = now
             if _final_win_step >= 12:
                 _final_win_active = False
-                for fix in ALL_MINIPANEL:
-                    _set_colour(fix, 150, 100, 0);  _set_dimmer(fix, 65)
-                for fix in ALL_MAGICBLADE:
-                    _set_colour(fix, 160, 105, 0);  _set_dimmer(fix, 65)
+                for fix in WIN_LOSE_FIXTURES:
+                    _set_colour(fix, 160, 105, 0); _set_dimmer(fix, 65)
                 print("[LIGHTING] Final win pulse complete.")
 
     # --- Final lose heartbeat ---
     if _final_lose_active:
         if now - _final_lose_last_ms >= 700:
             _final_lose_on = not _final_lose_on
-            dimmer = 60 if _final_lose_on else 15
-            for fix in ALL_MAGICBLADE:
-                _set_colour(fix, 100, 0, 0);    _set_dimmer(fix, dimmer)
+            dimmer = 55 if _final_lose_on else 12
+            for fix in WIN_LOSE_FIXTURES:
+                _set_colour(fix, 100, 0, 0); _set_dimmer(fix, dimmer)
             _final_lose_last_ms = now
+
+    # --- Boss cascade: Zone B -> Zone C -> Zone D -> BOSS MAN, 1s apart ---
+    if _boss_sequence_active:
+        if now - _boss_last_ms >= BOSS_STEP_MS:
+            _boss_step  += 1
+            _boss_last_ms = now
+
+            if _boss_step == 1:
+                _send(f'Off Sequence "{ZONE_SEQS[1]}"')
+                print("[LIGHTING] Zone A off.")
+            elif _boss_step == 2:
+                _send(f'Off Sequence "{ZONE_SEQS[2]}"')
+                print("[LIGHTING] Zone B off.")
+            elif _boss_step == 3:
+                _send(f'Off Sequence "{ZONE_SEQS[3]}"')
+                print("[LIGHTING] Zone C off.")
+            elif _boss_step == 4:
+                _send(f'Off Sequence "{ZONE_SEQS[4]}"')
+                print("[LIGHTING] Zone D off.")
+            elif _boss_step == 5:
+                _send(f'Go Sequence "{BOSS_SEQ}" Cue 1')
+                _boss_sequence_active = False
+                print(f"[LIGHTING] '{BOSS_SEQ}' ON - stays on permanently.")
