@@ -8,12 +8,42 @@ from collections import defaultdict
 import math
 import threading
 
+import color_logger  # NEW: live HSV/RGB sampling + CSV logging
+
 GREEN_LOWER = np.array([50, 100, 60])
 GREEN_UPPER = np.array([84, 255, 255])
 
 # === MULTIPLAYER: BLUE OBJECT TRACKING RANGE ===
-BLUE_LOWER = np.array([92, 150, 120])
-BLUE_UPPER = np.array([120, 255, 255])
+# NOTE: your TV's green, under bright light, drifts into H=91-97 and
+# V=190-237 -- both fully inside your old blue range. HSV alone can't
+# separate the two colors here (their H/S/V distributions overlap too
+# much), so the bounds below are intentionally loose. The real filtering
+# now happens in get_blue_mask()'s blue-minus-green channel check.
+BLUE_LOWER = np.array([85, 100, 100])
+BLUE_UPPER = np.array([130, 255, 255])
+
+# Minimum (B - G) raw channel gap required to count as "blue enough".
+# Your real blue prop measured B-G in the 70-120 range; the TV's green
+# measured B-G around 10-20. 30 sits safely between the two.
+BLUE_GREEN_DIFF_THRESHOLD = 30
+
+
+def get_blue_mask(bgr_frame, hsv_frame):
+    """
+    HSV thresholding alone can't distinguish this rig's blue prop from
+    the TV's green under bright light -- their hue/saturation/value
+    distributions overlap too much. This adds a raw-channel check
+    (blue channel must clearly dominate green channel) on top of the
+    HSV mask to kill the TV false-positives without also clipping real
+    blue pixels.
+    """
+    hsv_mask = cv2.inRange(hsv_frame, BLUE_LOWER, BLUE_UPPER)
+
+    b, g, r = cv2.split(bgr_frame)
+    diff = cv2.subtract(b, g)  # uint8 subtract clips at 0, which is fine here
+    _, diff_mask = cv2.threshold(diff, BLUE_GREEN_DIFF_THRESHOLD, 255, cv2.THRESH_BINARY)
+
+    return cv2.bitwise_and(hsv_mask, diff_mask)
 
 mp_hands = mp.solutions.hands.Hands(
     static_image_mode=False,  
@@ -147,9 +177,14 @@ def check_csv_thumbs_up(live_landmarks, reference_samples, threshold=0.35):
                 return True
     return False
 
-def process_cv_frame(cap, cursor_pos, width_max, height_max, run_skeletal_check=False):
+def process_cv_frame(cap, cursor_pos, width_max, height_max, run_skeletal_check=False, start_time_ms=None):
     """Processes webcam frames with color tracking and selective skeletal tracking.
-    cap is now a CameraThread instance — reads return instantly from the latest frame."""
+    cap is now a CameraThread instance — reads return instantly from the latest frame.
+
+    start_time_ms: optional — pass your game's start tick (e.g. the pygame.time.get_ticks()
+    value from when the session/stage began) so color_logger's elapsed_ms column is
+    meaningful. Safe to leave as None if you don't care about elapsed time.
+    """
     global mp_hands
 
     # Non-blocking read from the background thread
@@ -158,6 +193,12 @@ def process_cv_frame(cap, cursor_pos, width_max, height_max, run_skeletal_check=
         return False, None, None, cursor_pos, None, False, None
 
     frame = cv2.flip(frame, 1)
+
+    # NEW: take an untouched copy for color logging BEFORE any debug circles
+    # get drawn on `frame` further down — those solid (0,255,0)/(180,0,220)
+    # circles sit directly on top of the tracked object and would otherwise
+    # contaminate the HSV/RGB sample with pure debug-marker color.
+    frame_for_logging = frame.copy()
 
     # === 1. CAPTURE CLEAN RGB ARRAY FOR MEDIAPIPE BEFORE DRAWING ===
     rgb_check_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -174,7 +215,8 @@ def process_cv_frame(cap, cursor_pos, width_max, height_max, run_skeletal_check=
     
     tracked_cursor = None
     size_alert = False
-    
+    largest_contour = None  # NEW: always defined, even if nothing detected this frame
+
     if contours_green:
         largest_contour = max(contours_green, key=cv2.contourArea)
         area = cv2.contourArea(largest_contour)
@@ -191,13 +233,14 @@ def process_cv_frame(cap, cursor_pos, width_max, height_max, run_skeletal_check=
                 cv2.circle(frame, (local_x, local_y), 15, (0, 255, 0), -1)
 
     # === 3. BLUE OBJECT TRACKING (P2 — ALWAYS RUNS) ===
-    mask_blue = cv2.inRange(hsv_roi, BLUE_LOWER, BLUE_UPPER)
+    mask_blue = get_blue_mask(frame, hsv_roi)
     mask_blue = cv2.erode(mask_blue, None, iterations=2)
     mask_blue = cv2.dilate(mask_blue, None, iterations=2)
 
     contours_blue, _ = cv2.findContours(mask_blue, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     tracked_cursor_p2 = None
+    largest_blue = None  # NEW: always defined, even if nothing detected this frame
 
     if contours_blue:
         largest_blue = max(contours_blue, key=cv2.contourArea)
@@ -210,6 +253,12 @@ def process_cv_frame(cap, cursor_pos, width_max, height_max, run_skeletal_check=
                 local_py = int(M2["m01"] / M2["m00"])
                 tracked_cursor_p2 = (int(local_px * (width_max / 640)), int(local_py * (height_max / 480)))
                 cv2.circle(frame, (local_px, local_py), 15, (180, 0, 220), -1)
+
+    # === NEW: LIVE HSV/RGB COLOR LOGGING ===
+    # Uses frame_for_logging (captured before any debug circles were drawn)
+    # so the sampled pixels reflect the prop's real color under current
+    # lighting, not the debug overlay marker color.
+    color_logger.log_frame_colors(frame_for_logging, largest_contour, largest_blue, start_time_ms)
 
     # === 4. SELECTIVE SKELETAL TRACKING (ONLY RUNS ON DEMAND) ===
     hand_landmarks_list = None
