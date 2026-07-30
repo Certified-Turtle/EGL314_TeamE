@@ -121,7 +121,7 @@ _round_sequence_last_ms  = 0
 
 _gobo_active             = False
 
-_boss_triggered          = False   # One-time guard — boss cascade only ever fires once per game
+_boss_triggered          = False   # One-time guard - boss cascade only ever fires once per game
 _boss_sequence_active    = False   # True while the Zone A->B->C->D->BOSS MAN cascade is ticking
 _boss_step               = 0
 _boss_last_ms            = 0
@@ -574,17 +574,14 @@ def update():
 
             if _boss_step == 1:
                 _send(f'Off Sequence "{ZONE_SEQS[1]}"')
-                print("[LIGHTING] Zone A off.")
+                print("[LIGHTING] Zone B off.")
             elif _boss_step == 2:
                 _send(f'Off Sequence "{ZONE_SEQS[2]}"')
-                print("[LIGHTING] Zone B off.")
+                print("[LIGHTING] Zone C off.")
             elif _boss_step == 3:
                 _send(f'Off Sequence "{ZONE_SEQS[3]}"')
-                print("[LIGHTING] Zone C off.")
-            elif _boss_step == 4:
-                _send(f'Off Sequence "{ZONE_SEQS[4]}"')
                 print("[LIGHTING] Zone D off.")
-            elif _boss_step == 5:
+            elif _boss_step == 4:
                 _send(f'Go Sequence "{BOSS_SEQ}" Cue 1')
                 _boss_sequence_active = False
                 print(f"[LIGHTING] '{BOSS_SEQ}' ON - stays on permanently.")
