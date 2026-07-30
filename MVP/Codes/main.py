@@ -19,6 +19,7 @@ from pythonosc import udp_client
 import lighting
 import audio
 import assets
+import color_logger
 
 # =================================================================
 # === 1. CONFIGURATION STAGE & PERFORMANCE CANVAS RESCALING ===
@@ -100,9 +101,9 @@ hover_start_progress = 0
 
 # === STAGE SYSTEM ===
 current_stage = 1                          # 1, 2, or 3
-STAGE_DURATION = 30                        # Seconds per stage
-STAGE_TARGETS = {1: 30, 2: 20, 3: 10}    # Score needed to pass each stage
-STAGE_SPEEDS = {1: 1300, 2: 750, 3: 250}  # Move interval ms — noticeably faster each stage
+STAGE_DURATION = 30                        # Unused for gating now — kept only in case you want it back
+STAGE_TARGETS = {1: 30, 2: 20, 3: 10}    # Score needed to advance — reaching this instantly clears the stage
+STAGE_SPEEDS = {1: 1300, 2: 900, 3: 700}  # Move interval ms — noticeably faster each stage
 stage_clear_hover = 0                      # Hover progress for stage clear button
 stage_passed = False                       # Whether player hit the target this stage
 
@@ -154,13 +155,14 @@ spawn_pool = [
     "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY", 
     "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY", 
     "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY", 
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY", 
+    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",
+    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY", 
     "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",
     "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",
     "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY", 
     "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY", 
     "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY", 
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       # Final element (56)
+    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",   # Final element (56)
 ]
 pool_pointer = 0
 
@@ -206,6 +208,7 @@ while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
                 lighting.on_game_close()             # ← LIGHTING: all lights off before exit
+                color_logger.close_color_logger()    # ← NEW: flush and close the HSV/RGB log
                 pygame.quit(); sys.exit()
         
         # Once 1 second passes, safely inject the camera stream
@@ -214,6 +217,7 @@ while True:
             reference_ok_sign = opencv.load_relational_gesture_csv("okhandsign.csv")
             camera_fully_initialized = True
             lighting.init()                          # ← LIGHTING: spooky atmosphere + spotlight on load
+            color_logger.init_color_logger("hsv_rgb_log.csv")  # ← NEW: start HSV/RGB logging
             last_move_time = pygame.time.get_ticks()
         
         clock.tick(60)
@@ -243,7 +247,8 @@ while True:
         list(cursor_pos), 
         WIDTH, 
         HEIGHT, 
-        run_skeletal_check=need_hand_skeleton
+        run_skeletal_check=need_hand_skeleton,
+        start_time_ms=start_ticks
     )
     
     rgb_frame = None
@@ -368,6 +373,7 @@ while True:
     for event in pygame.event.get():
         if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
             lighting.on_game_close()
+            color_logger.close_color_logger()    # ← NEW: flush and close the HSV/RGB log
             pygame.quit(); sys.exit()
         
     # === TOGGLE DETECTOR ===
@@ -432,6 +438,7 @@ while True:
         if game_phase == PHASE_GAMEOVER and event.type == pygame.KEYDOWN:
             if event.key == pygame.K_q:
                 lighting.on_game_close()             # ← LIGHTING: all lights off before exit
+                color_logger.close_color_logger()    # ← NEW: flush and close the HSV/RGB log
                 pygame.quit(); sys.exit()
             if event.key == pygame.K_r: 
                 score, time_left, start_ticks, current_hole, _ = restart_quit.reset_game()
@@ -567,32 +574,26 @@ while True:
             if p2_hit and active_entity_type == "DECOY" and game_phase == PHASE_GAMEPLAY:
                 lighting.on_decoy_hit()              # ← LIGHTING: same red flash for P2 decoy hit
         
-        # 2. Match Timing & Stage Completion Check
+        # 2. Points-Based Stage Completion Check (no timer gating anymore)
         if game_phase == PHASE_GAMEPLAY:
+            # time_left is now just an elapsed-time readout for the UI —
+            # it no longer gates anything. Progression is purely score-based:
+            # the moment you hit the stage target, you advance immediately.
             seconds_in_game = (now - start_ticks) // 1000
-            time_left = max(0, STAGE_DURATION - seconds_in_game)
+            time_left = seconds_in_game  # repurposed as "time elapsed" for display
 
-            lighting.on_countdown(time_left)         # ← LIGHTING: handles 10s shift + per-second flash
-
-            if time_left == 0:
-                # Stage time is up — check if target was met
-                stage_passed = score >= STAGE_TARGETS[current_stage]
+            if score >= STAGE_TARGETS[current_stage]:
+                # Points-based progression: hitting the target always counts
+                # as a pass. There is no fail/timeout state anymore.
+                stage_passed = True
                 if current_stage == 3:
-                    # Final stage done — go to game over regardless
                     game_phase = PHASE_GAMEOVER
-                    if stage_passed:
-                        lighting.on_win()            # ← LIGHTING: final win amber gold
-                    else:
-                        lighting.on_lose()           # ← LIGHTING: final lose doom heartbeat
+                    lighting.on_win()            # ← LIGHTING: final win amber gold
                 else:
                     game_phase = PHASE_STAGE_CLEAR
                     stage_clear_hover = 0
-                    if stage_passed:
-                        audio.win_pt()         # ← AUDIO: stage win sound effect
-                        lighting.on_stage_win(current_stage)   # ← LIGHTING: stage win dark gold
-                    else:
-                        audio.lose_pt()        # ← AUDIO: stage lose sound effect
-                        lighting.on_stage_lose(current_stage)  # ← LIGHTING: stage lose dark red
+                    audio.win_pt()         # ← AUDIO: stage win sound effect
+                    lighting.on_stage_win(current_stage)   # ← LIGHTING: stage win dark gold
 
         # 3. Stage-Aware Move Interval & Positional Shifting
         # Stage 3 also enables decoys via the spawn pool
@@ -678,8 +679,9 @@ while True:
         stage_names = {1: "STAGE 1 — CASUAL", 2: "STAGE 2 — FASTER", 3: "STAGE 3 — DANGER"}
         stage_txt = ui_font.render(stage_names[current_stage], True, (220, 200, 255))
         screen.blit(stage_txt, (WIDTH // 2 - stage_txt.get_width() // 2, 20))
-        # Target reminder
-        target_txt = ui_font.render(f"TARGET: {STAGE_TARGETS[current_stage]} GHOSTS", True, (180, 180, 220))
+        # Points-remaining reminder (replaces the old static "TARGET: X GHOSTS" label)
+        points_remaining = max(0, STAGE_TARGETS[current_stage] - score)
+        target_txt = ui_font.render(f"{points_remaining} MORE TO CLEAR STAGE {current_stage}", True, (180, 180, 220))
         screen.blit(target_txt, (WIDTH // 2 - target_txt.get_width() // 2, 62))
         # Multiplayer mode indicator
         if multiplayer_mode:
@@ -760,11 +762,15 @@ while True:
         debug_txt = pygame.transform.scale(debug_txt, (80, 18))
         screen.blit(debug_txt, (dx + 10, dy + debug_h + 12))
 
+    # === PAUSE OVERLAY — drawn onto `screen` BEFORE the scale/blit step ===
+    # (previously this ran after real_screen already had the frame blitted,
+    # so the overlay never actually made it to the display)
+    if is_paused:
+        designs.draw_pause_overlay(screen, title_font, ui_font)
+
     # Scale the internal virtual surface to match native hardware window
     scaled_surface = pygame.transform.scale(screen, (NATIVE_WIDTH, NATIVE_HEIGHT))
     real_screen.blit(scaled_surface, (0, 0))
-    if is_paused:
-        designs.draw_pause_overlay(screen, title_font, ui_font)
 
     pygame.display.flip()
     clock.tick(60)
