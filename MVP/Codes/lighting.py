@@ -2,32 +2,30 @@
 # Handles all GMA3 OSC lighting control
 #
 # ─────────────────────────────────────────────────────────────────
-# FIXTURE OWNERSHIP MAP — what controls what:
+# GAME FLOW / FIXTURE OWNERSHIP MAP:
 #
-#  GAME SEQUENCE (atmosphere/effects — this script's normal loop):
-#    Fixture 702, Fixture 704, Fixture 802, Fixture 804
+#  1. Script launches -> init() fires "main face lights".
 #
-#  WIN/LOSE EFFECTS — used ONLY by on_stage_win/on_stage_lose/on_win/on_lose,
-#  never touched by anything else (not spooky, not countdown, not decoy hit,
-#  not the round chase):
-#    Fixture 301, Fixture 401, Fixture 701, Fixture 801
+#  2. Team presses 'O' -> on_intro_transition() turns "main face lights"
+#     OFF and turns "spotlightE" ON. "main face lights" is LOCKED off
+#     after this and can never turn on again this session.
 #
-#  SPOTLIGHT SEQUENCE ("spotlightE") — toggled by the 'O' key via
-#  on_spotlight_toggle(). Pressing it clears everything (round sequence,
-#  goboE, game-sequence fixtures) THEN fires spotlightE.
+#  3. Tutorial starts, then rounds 1-3 play -> the normal game sequence
+#     (spooky/countdown/decoy hit/round chase on Fixture 702, 704, 802, 804)
+#     and win/lose effects (Fixture 301, 401, 701, 801) run as usual.
+#     "goboE" runs alongside the round chase.
 #
-#  GOBO SEQUENCE ("goboE") — wall decoration. ON ONLY while the game
-#  sequence (round chase) is playing, OFF otherwise.
+#  4. Round 3, 8th ghost hit -> trigger_boss_sequence() fires ONCE:
+#       - Turns OFF only the lights THIS SCRIPT uses: spotlightE, goboE,
+#         the 4 game-sequence fixtures, the 4 win/lose fixtures, and
+#         "main face lights" (safety, in case it was somehow still on).
+#         Nothing outside this file's scope is touched.
+#       - Fires "BOSSMAN", which stays on. BOSSMAN turns off the Zone
+#         A/B/C/D sequences itself on the console — this script no
+#         longer sends any Zone commands.
 #
-#  BOSS ENDGAME CASCADE — triggered once, when the ghost counter hits 8
-#  during round 3 (see trigger_boss_sequence()):
-#    1. Everything above (spotlightE, goboE, game-sequence fixtures,
-#       win/lose fixtures) turns off immediately.
-#    2. "Zone A" -> "Zone B" -> "Zone C" -> "Zone D" turn off one by one,
-#       1 second apart.
-#    3. One more second later, "BOSS MAN" turns on and STAYS ON —
-#       including after the game process exits. on_game_close() no
-#       longer clears any lights, specifically so BOSS MAN persists.
+#  5. Game exits -> on_game_close() intentionally does NOTHING, so
+#     BOSSMAN (and anything else running) stays on after the process ends.
 # ─────────────────────────────────────────────────────────────────
 
 import pygame
@@ -43,10 +41,10 @@ GMA3_ADDR = "/gma3/cmd"
 # =================================================================
 # === SEQUENCE NAMES ===
 # =================================================================
-SPOTLIGHT_SEQ = "spotlightE"
-GOBO_SEQ      = "goboE"
-ZONE_SEQS     = ["Zone A", "Zone B", "Zone C", "Zone D"]
-BOSS_SEQ      = "BOSS MAN"
+MAIN_FACE_SEQ = "main face lights"   # Pre-game explanation, replaced by spotlightE via 'O'
+SPOTLIGHT_SEQ = "spotlightE"         # Fired once via 'O', stays on until boss trigger/close
+GOBO_SEQ      = "goboE"              # Wall decor — ON only while game sequence is playing
+BOSS_SEQ      = "BOSSMAN"            # Fired once at the endgame trigger — turns off zones itself
 
 # =================================================================
 # === FIXTURE GROUPS ===
@@ -70,7 +68,6 @@ STAGE_WIN_PULSE_MS          = 200
 STAGE_LOSE_PULSE_MS         = 500
 COUNTDOWN_FLASH_DURATION_MS = 120
 SEQUENCE_STEP_MS            = 350
-BOSS_STEP_MS                = 1000   # 1 second between each zone/boss step
 
 # Colour ranges
 RED_MIN,   RED_MAX   = 0, 255
@@ -121,10 +118,10 @@ _round_sequence_last_ms  = 0
 
 _gobo_active             = False
 
-_boss_triggered          = False   # One-time guard - boss cascade only ever fires once per game
-_boss_sequence_active    = False   # True while the Zone A->B->C->D->BOSS MAN cascade is ticking
-_boss_step               = 0
-_boss_last_ms            = 0
+_main_face_active        = False   # Tracks whether "main face lights" is currently on
+_intro_transitioned      = False   # Once True, main face lights can NEVER turn on again
+
+_boss_triggered           = False   # One-time guard - boss trigger only ever fires once per game
 
 
 # =================================================================
@@ -185,7 +182,7 @@ def _stop_gobo_sequence():
 
 
 def _stop_all_effects():
-    """Resets every routine effect flag. Does NOT touch the boss cascade state."""
+    """Resets every routine effect flag. Does NOT touch the boss trigger state."""
     global _stage_win_active, _stage_lose_active
     global _final_win_active, _final_lose_active
     global _decoy_flash_active, _countdown_triggered
@@ -242,35 +239,43 @@ def _setup_thumbsup():
 def init():
     """
     Call ONCE at game startup.
-    - Resets all effect state, including the boss cascade guard for a fresh session
-    - Sets spooky atmosphere on the 4 game-sequence fixtures only
-    - Does NOT fire spotlightE (only 'O' does that) or goboE (only the round
-      sequence does that)
+    - Fires "main face lights" for the pre-game explanation
+    - Resets all effect state, including the boss trigger guard for a fresh session
+    - Does NOT set any atmosphere on the game-sequence fixtures yet - that starts
+      when the tutorial begins
     """
-    global _boss_triggered, _boss_sequence_active, _boss_step
+    global _main_face_active, _intro_transitioned, _boss_triggered
 
     _stop_all_effects()
-    _boss_triggered       = False
-    _boss_sequence_active = False
-    _boss_step            = 0
+    _intro_transitioned = False
+    _boss_triggered      = False
 
-    _setup_spooky()
+    _send(f'Go Sequence "{MAIN_FACE_SEQ}" Cue 1')
+    _main_face_active = True
+    print(f"[LIGHTING] '{MAIN_FACE_SEQ}' fired for the pre-game explanation.")
     print("[LIGHTING] Initialised.")
 
 
-def on_spotlight_toggle():
+def on_intro_transition():
     """
-    Call when 'O' is pressed.
-    Clears everything (round sequence, goboE, game-sequence fixtures) THEN
-    fires spotlightE. Does not touch win/lose fixtures, zones, or BOSS MAN.
+    Call ONCE, when the team presses 'O' after explaining the game.
+    Turns OFF "main face lights" and turns ON "spotlightE".
+    Safe to call more than once - after the first call, main face lights is
+    locked off and calling this again does nothing.
     """
-    _stop_all_effects()
+    global _main_face_active, _intro_transitioned
 
-    for fix in GAME_FIXTURES:
-        _set_dimmer(fix, 0)
+    if _intro_transitioned:
+        return
+
+    _intro_transitioned = True
+
+    if _main_face_active:
+        _send(f'Off Sequence "{MAIN_FACE_SEQ}"')
+        _main_face_active = False
 
     _send(f'Go Sequence "{SPOTLIGHT_SEQ}" Cue 1')
-    print(f"[LIGHTING] Cleared everything - '{SPOTLIGHT_SEQ}' ON.")
+    print(f"[LIGHTING] '{MAIN_FACE_SEQ}' OFF, '{SPOTLIGHT_SEQ}' ON - locked for rest of game.")
 
 
 def on_tutorial_start():
@@ -405,12 +410,10 @@ def on_lose():
 
 def on_game_restart():
     """K_r restart. Clears routine effects, restores spooky, re-arms the boss trigger."""
-    global _boss_triggered, _boss_sequence_active, _boss_step
+    global _boss_triggered
 
     _stop_all_effects()
-    _boss_triggered       = False
-    _boss_sequence_active = False
-    _boss_step            = 0
+    _boss_triggered = False
 
     _setup_spooky()
     print("[LIGHTING] Restarted - spooky restored, boss trigger re-armed.")
@@ -421,19 +424,21 @@ def trigger_boss_sequence():
     Call ONCE, when the ghost counter hits 8 during round 3.
     Safe to call more than once - after the first call this does nothing.
 
-    1. Turns off spotlightE, goboE, game-sequence fixtures, and win/lose fixtures.
-    2. Turns off Zone A immediately, then Zone B/C/D one at a time, 1 second apart.
-    3. One more second after Zone D, fires BOSS MAN - which stays on permanently,
-       including after the game process exits (on_game_close() no longer clears it).
+    Turns off ONLY the lights this script uses (main face lights, spotlightE,
+    goboE, the 4 game-sequence fixtures, the 4 win/lose fixtures) - nothing
+    outside this file's scope is touched. Then fires BOSSMAN, which stays on
+    and handles turning off the Zone A/B/C/D sequences by itself on the console.
     """
-    global _boss_triggered, _boss_sequence_active, _boss_step, _boss_last_ms
+    global _boss_triggered, _main_face_active
 
     if _boss_triggered:
         return
     _boss_triggered = True
 
-    # 1. Everything mentioned above, off
+    # Turn off only the lights this script owns
     _stop_all_effects()
+    _send(f'Off Sequence "{MAIN_FACE_SEQ}"')
+    _main_face_active = False
     _send(f'Off Sequence "{SPOTLIGHT_SEQ}"')
 
     for fix in GAME_FIXTURES:
@@ -441,23 +446,19 @@ def trigger_boss_sequence():
     for fix in WIN_LOSE_FIXTURES:
         _set_dimmer(fix, 0)
 
-    # 2. Zone A off immediately, B/C/D handled in update() at 1s intervals
-    _send(f'Off Sequence "{ZONE_SEQS[0]}"')
+    # BOSSMAN handles the zones itself - just fire it and leave it on
+    _send(f'Go Sequence "{BOSS_SEQ}" Cue 1')
 
-    _boss_sequence_active = True
-    _boss_step            = 0
-    _boss_last_ms          = pygame.time.get_ticks()
-
-    print("[LIGHTING] BOSS TRIGGER - all lights off, Zone A down, cascade starting.")
+    print(f"[LIGHTING] BOSS TRIGGER - game lights off, '{BOSS_SEQ}' ON (handles zones itself).")
 
 
 def on_game_close():
     """
     Called when the game exits.
-    Intentionally does NOT turn anything off - BOSS MAN (and whatever else is
+    Intentionally does NOT turn anything off - BOSSMAN (and whatever else is
     running) must persist after the game process ends.
     """
-    print("[LIGHTING] Game closed - lights intentionally left as-is (BOSS MAN persists).")
+    print("[LIGHTING] Game closed - lights intentionally left as-is (BOSSMAN persists).")
 
 
 def update():
@@ -469,7 +470,6 @@ def update():
       - Round chase sequence
       - Stage win/lose pulses
       - Final win/lose pulses
-      - Boss cascade (Zone B/C/D off, then BOSS MAN on)
     """
     global _decoy_flash_active
     global _countdown_flash_active
@@ -478,7 +478,6 @@ def update():
     global _final_win_active, _final_win_step, _final_win_on, _final_win_last_ms
     global _final_lose_active, _final_lose_on, _final_lose_last_ms
     global _round_sequence_active, _round_sequence_step, _round_sequence_last_ms
-    global _boss_sequence_active, _boss_step, _boss_last_ms
 
     now = pygame.time.get_ticks()
 
@@ -565,23 +564,3 @@ def update():
             for fix in WIN_LOSE_FIXTURES:
                 _set_colour(fix, 100, 0, 0); _set_dimmer(fix, dimmer)
             _final_lose_last_ms = now
-
-    # --- Boss cascade: Zone B -> Zone C -> Zone D -> BOSS MAN, 1s apart ---
-    if _boss_sequence_active:
-        if now - _boss_last_ms >= BOSS_STEP_MS:
-            _boss_step  += 1
-            _boss_last_ms = now
-
-            if _boss_step == 1:
-                _send(f'Off Sequence "{ZONE_SEQS[1]}"')
-                print("[LIGHTING] Zone B off.")
-            elif _boss_step == 2:
-                _send(f'Off Sequence "{ZONE_SEQS[2]}"')
-                print("[LIGHTING] Zone C off.")
-            elif _boss_step == 3:
-                _send(f'Off Sequence "{ZONE_SEQS[3]}"')
-                print("[LIGHTING] Zone D off.")
-            elif _boss_step == 4:
-                _send(f'Go Sequence "{BOSS_SEQ}" Cue 1')
-                _boss_sequence_active = False
-                print(f"[LIGHTING] '{BOSS_SEQ}' ON - stays on permanently.")
