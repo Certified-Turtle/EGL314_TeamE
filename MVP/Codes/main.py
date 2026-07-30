@@ -93,6 +93,14 @@ PHASE_GAMEPLAY = 3
 PHASE_GAMEOVER = 4
 PHASE_TUTORIAL_MP = 5    # Multiplayer combined training session
 PHASE_STAGE_CLEAR = 6    # Between-stage screen with score + hover to continue
+PHASE_BOSS = 7           # NEW: black-screen boss lighting sequence, triggered mid-stage-3
+
+# === BOSS SEQUENCE STATE ===
+BOSS_TRIGGER_COUNT = 7           # number of real phantoms hit in stage 3 before the boss triggers
+BOSS_SEQUENCE_DURATION = 6000   # ms the black screen holds before returning to gameplay — tune to match your lighting cue length
+stage3_ghost_hits = 0           # counts only GHOST hits (not decoys) during stage 3
+boss_triggered = False          # prevents re-triggering once the boss sequence has fired
+boss_start_time = 0
 
 game_phase = PHASE_INTRO  
 tutorial_count = 0
@@ -103,14 +111,9 @@ hover_start_progress = 0
 current_stage = 1                          # 1, 2, or 3
 STAGE_DURATION = 30                        # Unused for gating now — kept only in case you want it back
 STAGE_TARGETS = {1: 30, 2: 20, 3: 10}    # Score needed to advance — reaching this instantly clears the stage
-STAGE_SPEEDS = {1: 1300, 2: 900, 3: 700}  # Move interval ms — noticeably faster each stage
+STAGE_SPEEDS = {1: 1300, 2: 750, 3: 250}  # Move interval ms — noticeably faster each stage
 stage_clear_hover = 0                      # Hover progress for stage clear button
 stage_passed = False                       # Whether player hit the target this stage
-
-# Ghost counter checkpoint that triggers the boss sequence — round 3 only
-BOSS_TRIGGER_STAGE = 3
-BOSS_TRIGGER_SCORE = 8
-boss_sequence_triggered = False   # Local mirror so we don't spam the call every frame
 
 score, time_left, start_ticks, current_hole, game_over = restart_quit.reset_game()
 last_move_time = pygame.time.get_ticks()
@@ -212,7 +215,7 @@ while True:
         # Check for window exit events even while loading to prevent OS "Not Responding" hangs
         for event in pygame.event.get():
             if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
-                lighting.on_game_close()             # ← LIGHTING: intentionally leaves lights as-is
+                lighting.on_game_close()             # ← LIGHTING: all lights off before exit
                 color_logger.close_color_logger()    # ← NEW: flush and close the HSV/RGB log
                 pygame.quit(); sys.exit()
         
@@ -221,6 +224,7 @@ while True:
             cap = opencv.init_camera()
             reference_ok_sign = opencv.load_relational_gesture_csv("okhandsign.csv")
             camera_fully_initialized = True
+            lighting.init()                          # ← LIGHTING: spooky atmosphere + spotlight on load
             color_logger.init_color_logger("hsv_rgb_log.csv")  # ← NEW: start HSV/RGB logging
             last_move_time = pygame.time.get_ticks()
         
@@ -233,6 +237,8 @@ while True:
     is_tutorial_scene = game_phase in [PHASE_TUTORIAL, PHASE_TUTORIAL_MP, PHASE_INSTRUCT, PHASE_PREPARE]
     if game_phase in [PHASE_INTRO]:
         screen.fill((10, 8, 20))
+    elif game_phase == PHASE_BOSS:
+        screen.fill((0, 0, 0))  # NEW: pure black during the boss lighting sequence
     elif game_phase == PHASE_STAGE_CLEAR:
         designs.draw_haunted_house(screen, lightning_active)
     elif is_tutorial_scene:
@@ -386,9 +392,6 @@ while True:
                 show_debug_camera = not show_debug_camera
                 print(f"[UI] Debug camera window visibility set to: {show_debug_camera}")
 
-            if event.key == pygame.K_o:  # Press 'O' once, after the team finishes explaining the game
-                lighting.on_intro_transition()   # ← LIGHTING: "main face lights" OFF, "spotlightE" ON (locked)
-
             if event.key == pygame.K_p:  # Press 'P' to pause/resume
                 if game_phase in [PHASE_TUTORIAL, PHASE_TUTORIAL_MP, PHASE_GAMEPLAY]:
                     is_paused = not is_paused
@@ -438,13 +441,15 @@ while True:
                         start_ticks = now
                         last_move_time = now
                         game_phase = PHASE_GAMEPLAY
+                        stage3_ghost_hits = 0
+                        boss_triggered = False
                         lighting.on_tutorial_start()
                         print(f"[DEBUG] Jumped to stage {current_stage} via hotkey.")
 
         
         if game_phase == PHASE_GAMEOVER and event.type == pygame.KEYDOWN:
             if event.key == pygame.K_q:
-                lighting.on_game_close()             # ← LIGHTING: intentionally leaves lights as-is
+                lighting.on_game_close()             # ← LIGHTING: all lights off before exit
                 color_logger.close_color_logger()    # ← NEW: flush and close the HSV/RGB log
                 pygame.quit(); sys.exit()
             if event.key == pygame.K_r: 
@@ -452,13 +457,16 @@ while True:
                 tutorial_count = 0; mp_tutorial_count = 0; game_phase = PHASE_INTRO; death_sequences = []
                 ghost_state = "UP"; ghost_y_offset = 0; last_move_time = now
                 current_stage = 1; stage_clear_hover = 0; stage_passed = False
-                boss_sequence_triggered = False   # ← re-arm the boss trigger for the new playthrough
 
                 total_ghosts_spawned = 0
                 total_decoys_spawned = 0
                 
                 # === RESET POINTER FOR THE NEW GAME ===
                 pool_pointer = 0
+
+                # === RESET BOSS STATE ===
+                stage3_ghost_hits = 0
+                boss_triggered = False
 
                 # === RESET MULTIPLAYER STATE ON RESTART ===
                 multiplayer_mode = True
@@ -470,7 +478,7 @@ while True:
                 last_frame_pos_p2 = pygame.math.Vector2(WIDTH // 2, HEIGHT // 2)
                 mp_tracking_locked = False
                 mp_ghost_timer_debt = 0
-                lighting.on_game_restart()           # ← LIGHTING: restore spooky, re-arm boss trigger
+                lighting.on_game_restart()           # ← LIGHTING: restore spooky + spotlight
 
     lighting.update()                                # ← LIGHTING: handles all timed effects every frame
 
@@ -485,7 +493,7 @@ while True:
 
     elif game_phase == PHASE_TUTORIAL and tutorial_count >= 5:
         game_phase = PHASE_INSTRUCT
-        lighting.on_thumbsup_check()                 # ← LIGHTING: full white for gesture check
+        lighting.on_thumbsup_check()                 # ← LIGHTING: calm white/blue for gesture
 
     elif game_phase == PHASE_TUTORIAL_MP and mp_tutorial_count >= 10:
         game_phase = PHASE_INSTRUCT
@@ -514,7 +522,7 @@ while True:
                 config.gesture_hold_progress = 0  
                 game_phase = PHASE_PREPARE
                 ready_timer = now
-                lighting.on_thumbsup_accepted()      # ← LIGHTING: restore spooky, round sequence on
+                lighting.on_thumbsup_accepted()      # ← LIGHTING: restore spooky, lightning on
         else:
             config.gesture_hold_progress = max(0, config.gesture_hold_progress - 2)
 
@@ -522,7 +530,19 @@ while True:
         game_phase = PHASE_GAMEPLAY
         start_ticks = now
         score = 0                # NEW: clear any score accumulated during tutorial hits
-        lighting.on_tutorial_start()                 # ← LIGHTING: game sequence on for gameplay
+        lighting.on_tutorial_start()                 # ← LIGHTING: enable lightning for gameplay
+
+    elif game_phase == PHASE_BOSS:
+        # Pure black screen + lighting cue — no gameplay logic runs while this is active.
+        if now - boss_start_time > BOSS_SEQUENCE_DURATION:
+            # Push the game clocks forward by however long the boss sequence took,
+            # same pattern as your pause system, so the freeze doesn't cost the
+            # player any of their remaining stage-3 time bookkeeping.
+            elapsed_boss = now - boss_start_time
+            start_ticks += elapsed_boss
+            last_move_time += elapsed_boss
+            game_phase = PHASE_GAMEPLAY
+            print("[BOSS] Sequence complete — resuming stage 3.")
 
     elif game_phase == PHASE_STAGE_CLEAR:
     # Hover-to-continue button for stage clear screen
@@ -541,7 +561,7 @@ while True:
             stage_clear_hover = 0
             start_ticks = now
             game_phase = PHASE_GAMEPLAY
-            lighting.on_tutorial_start()             # ← LIGHTING: re-enable game sequence for next stage
+            lighting.on_tutorial_start()             # ← LIGHTING: re-enable lightning for next stage
             print(f"[STAGE] Advancing to stage {current_stage}")
 
     # =================================================================
@@ -562,6 +582,10 @@ while True:
         if hit and game_phase == PHASE_TUTORIAL_MP:
             mp_tutorial_count += 1
 
+        # NEW: track real phantom hits in stage 3 for the boss trigger
+        if hit and current_stage == 3 and active_entity_type == "GHOST" and game_phase == PHASE_GAMEPLAY:
+            stage3_ghost_hits += 1
+
         # Decoy hit — full room red flash
         if hit and active_entity_type == "DECOY" and game_phase == PHASE_GAMEPLAY:
             lighting.on_decoy_hit()
@@ -578,19 +602,13 @@ while True:
             if p2_hit and game_phase == PHASE_TUTORIAL_MP:
                 mp_tutorial_count += 1
 
+            # NEW: track real phantom hits in stage 3 for the boss trigger (P2)
+            if p2_hit and current_stage == 3 and active_entity_type == "GHOST" and game_phase == PHASE_GAMEPLAY:
+                stage3_ghost_hits += 1
+
             # P2 decoy hit
             if p2_hit and active_entity_type == "DECOY" and game_phase == PHASE_GAMEPLAY:
                 lighting.on_decoy_hit()              # ← LIGHTING: same red flash for P2 decoy hit
-
-        # === BOSS TRIGGER — round 3, ghost counter hits 8 ===
-        # Guarded locally (boss_sequence_triggered) so we only ever call this once
-        # per playthrough; lighting.trigger_boss_sequence() has its own internal
-        # guard too, so this is just to avoid spamming the call every frame.
-        if (not boss_sequence_triggered and game_phase == PHASE_GAMEPLAY
-                and current_stage == BOSS_TRIGGER_STAGE and score >= BOSS_TRIGGER_SCORE):
-            boss_sequence_triggered = True
-            lighting.trigger_boss_sequence()         # ← LIGHTING: game lights off, BOSSMAN on
-            print(f"[BOSS] Ghost counter hit {score} in round {current_stage} — boss sequence triggered.")
         
         # 2. Points-Based Stage Completion Check (no timer gating anymore)
         if game_phase == PHASE_GAMEPLAY:
@@ -600,9 +618,21 @@ while True:
             seconds_in_game = (now - start_ticks) // 1000
             time_left = seconds_in_game  # repurposed as "time elapsed" for display
 
-            if score >= STAGE_TARGETS[current_stage]:
+            # === NEW: BOSS TRIGGER ===
+            # Once enough real phantoms have been captured in stage 3, freeze
+            # everything into a black screen and fire the lighting sequence.
+            if current_stage == 3 and not boss_triggered and stage3_ghost_hits >= BOSS_TRIGGER_COUNT:
+                boss_triggered = True
+                game_phase = PHASE_BOSS
+                boss_start_time = now
+                print(f"[BOSS] Triggered after {stage3_ghost_hits} phantoms captured — black screen + lighting cue.")
+                lighting.on_boss_sequence()  # ← LIGHTING: add this cue in lighting.py for your grandMA3 sequence
+
+            if score >= STAGE_TARGETS[current_stage] and not (current_stage == 3 and not boss_triggered):
                 # Points-based progression: hitting the target always counts
                 # as a pass. There is no fail/timeout state anymore.
+                # NOTE: stage 3 can't be cleared until the boss sequence has
+                # fired at least once (see the boss trigger check above).
                 stage_passed = True
                 if current_stage == 3:
                     game_phase = PHASE_GAMEOVER
@@ -680,12 +710,13 @@ while True:
         death["frame"] += 1
         if death["frame"] > 25: death_sequences.remove(death)
 
-    # Draw P1 crosshair (green)
-    designs.draw_crosshair(screen, cursor_pos)
+    # Draw P1 crosshair (green) — hidden during the boss black screen
+    if game_phase != PHASE_BOSS:
+        designs.draw_crosshair(screen, cursor_pos)
 
-    # Draw P2 crosshair (purple) — only when multiplayer is active
-    if multiplayer_mode:
-        designs.draw_crosshair(screen, cursor_pos_p2, color=(180, 0, 220))
+        # Draw P2 crosshair (purple) — only when multiplayer is active
+        if multiplayer_mode:
+            designs.draw_crosshair(screen, cursor_pos_p2, color=(180, 0, 220))
 
     if game_phase in [PHASE_TUTORIAL, PHASE_TUTORIAL_MP, PHASE_INSTRUCT, PHASE_PREPARE]:
         tutorial.handle_tutorial_rendering(screen, ui_font, title_font, countdown_font, game_phase, tutorial_count, now, locals().get('ready_timer', 0), mp_tutorial_count)
