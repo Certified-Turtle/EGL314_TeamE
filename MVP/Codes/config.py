@@ -1,4 +1,3 @@
-# config.py
 import pygame
 import numpy as np
 
@@ -9,8 +8,8 @@ WIDTH, HEIGHT = 1920, 1080
 GREEN_LOWER = np.array([35, 100, 100])
 GREEN_UPPER = np.array([85, 255, 255])
 
-PURPLE_LOWER = np.array([130, 100, 100])
-PURPLE_UPPER = np.array([155, 255, 255])
+BLUE_LOWER = np.array([100, 140, 100])
+BLUE_UPPER = np.array([120, 255, 255])
 
 # --- SYSTEM GAME STATES ---
 PHASE_INTRO = -2
@@ -36,13 +35,7 @@ START_BUTTON_RECT = pygame.Rect(WIDTH//2 - 250, HEIGHT//2 + 80, 500, 160)
 gesture_hold_progress = 0
 GESTURE_HOLD_TARGET = 60  # Updated: Exactly 3.0 seconds sustained at 60 FPS
 
-# Feature 2: Jack-O-Lantern Decoy Metrics
-decoy_hole = None
-decoy_state = "HIDDEN"  # "UP", "DOWN", "HIDDEN"
-decoy_y_offset = 180
-active_entity_type = "GHOST"  # Tracks whether a "GHOST" or "DECOY" is active in the hole
-
-# Feature 3: Dynamic Speed Ramping Configs
+# Feature 2: Dynamic Speed Ramping Configs
 current_move_interval = 2200  # Default 2.2 seconds
 next_speed_bump_time = 15000   # First shift at 15s (15000ms)
 speed_bump_interval = 7000     # Follow-up steps every 7s (7000ms)
