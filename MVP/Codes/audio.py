@@ -13,7 +13,6 @@ PORT = 8000
 
 client = udp_client.SimpleUDPClient(PI_A_ADDR, PORT)
 
-send_message(client, "/action/_RSec88256f5cfe129e3c94fe68f3db56f421abafd6")
 
 def mute_tracks():
     send_message(client, "/action/41255")
@@ -27,13 +26,13 @@ def ghost_hit():
     send_message(client, "/action/1007")  
 
 def win_pt():
-    send_message(client, "/action/41258")
+    send_message(client, "/action/40164")
     send_message(client, "/action/1007")  
 
 def lose_pt():
-    send_message(client, "/action/41259")
+    send_message(client, "/action/40163")
     send_message(client, "/action/1007")  
 
-def thunder():
-    send_message(client, "/action/41260")
+def boss():
+    send_message(client, "/action/41258")
     send_message(client, "/action/1007")
