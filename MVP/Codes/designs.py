@@ -77,6 +77,18 @@ def init_assets():
     # NEW: library-specific particles
     init_library_assets()
 
+containment_steam = [
+    {"x": random.randint(150, WIDTH - 150), "y": 780 + random.randint(0, 100),
+     "r": random.randint(15, 35), "speed": random.uniform(0.5, 1.5),
+     "drift": random.uniform(-0.3, 0.3), "life": random.uniform(0.3, 1.0)}
+    for _ in range(12)
+]
+
+containment_sparks = [
+    {"x": random.randint(60, WIDTH - 60), "y": random.randint(80, 550),
+     "timer": random.randint(60, 180)}
+    for _ in range(4)
+]
 
 def build_ghost_surf(aura_color):
     """Builds a ghost sprite surface tinted with the given aura_color (r,g,b).
@@ -138,6 +150,155 @@ def draw_haunted_house(surface, lightning_active):
         surface.blit(f["surf"], (int(f["x"] - f["radius"]), int(f["y"] - f["radius"])))
         f["x"] += f["speed"]
         if f["x"] - f["radius"] > WIDTH: f["x"] = -f["radius"]
+
+def draw_containment_area(surface):
+    """STAGE 3 background — a high-tech phantom containment chamber.
+    Stages 1 & 2 share draw_haunted_house(); this is meant to replace it
+    once players graduate from the warm-up rounds into the real
+    containment encounter. Here lightning_active is repurposed as a
+    'red alert' strobe rather than a lightning flash."""
+    global containment_steam, containment_sparks
+    t = pygame.time.get_ticks()
+
+    alarm_pulse = 0.6 + 0.4 * math.sin(t * 0.015)
+    wall_color = (28, 30, 34) 
+    surface.fill(wall_color)
+
+    # Riveted steel panel seams
+    panel_color = (18, 20, 24) 
+    for x in range(0, WIDTH, 160):
+        pygame.draw.rect(surface, panel_color, (x, 0, 14, 620))
+        for y in range(30, 600, 90):
+            pygame.gfxdraw.aacircle(surface, x + 7, y, 4, (70, 75, 80))
+            pygame.gfxdraw.filled_circle(surface, x + 7, y, 4, (70, 75, 80))
+
+    # Central glass containment cylinder
+    tube_x = WIDTH // 2
+    tube_top, tube_bottom = 120, 640
+    tube_w = 260
+
+    glass_color = (80, 220, 230, 60)
+    glass_surf = pygame.Surface((tube_w, tube_bottom - tube_top), pygame.SRCALPHA)
+    pygame.draw.rect(
+        glass_surf,
+        glass_color,
+        (0, 0, tube_w, tube_bottom - tube_top),
+        border_radius=40,
+    )
+    surface.blit(glass_surf, (tube_x - tube_w // 2, tube_top))
+
+    frame_color = (140, 150, 160) 
+    pygame.draw.rect(
+        surface,
+        frame_color,
+        (tube_x - tube_w // 2, tube_top, tube_w, tube_bottom - tube_top),
+        width=8,
+        border_radius=40,
+    )
+
+    for ry in range(tube_top + 40, tube_bottom - 20, 90):
+        pygame.draw.line(
+            surface,
+            frame_color,
+            (tube_x - tube_w // 2, ry),
+            (tube_x + tube_w // 2, ry),
+            4,
+        )
+
+    # Swirling energy inside the tube
+    swirl_col = (120, 255, 255) 
+    for i in range(6):
+        ang = t * 0.002 + i * (math.pi / 3)
+        ex = int(tube_x + math.cos(ang) * 70)
+        ey = int((tube_top + tube_bottom) // 2 + math.sin(ang * 1.3) * 140)
+
+        pygame.gfxdraw.aacircle(surface, ex, ey, 10, swirl_col)
+        pygame.gfxdraw.filled_circle(surface, ex, ey, 10, swirl_col)
+
+    # Warning strobe beacons
+    strobe_on = int(t / 400) % 2 == 0
+    beacon_color = (255, 40, 40) if strobe_on else (90, 10, 10)
+
+    for bx in (90, WIDTH - 90):
+        pygame.gfxdraw.aacircle(surface, bx, 60, 26, beacon_color)
+        pygame.gfxdraw.filled_circle(surface, bx, 60, 26, beacon_color)
+        pygame.draw.rect(surface, (40, 40, 40), (bx - 14, 30, 28, 20))
+
+    # Hazard-stripe floor
+    floor_y = 780
+    pygame.draw.rect(surface, (40, 40, 42), (0, floor_y, WIDTH, HEIGHT - floor_y))
+
+    stripe_w = 60
+    for i, x in enumerate(range(-stripe_w, WIDTH + stripe_w, stripe_w)):
+        col = (230, 190, 20) if i % 2 == 0 else (20, 20, 20)
+        pts = [
+            (x, floor_y + 30),
+            (x + stripe_w, floor_y + 30),
+            (x + stripe_w - 30, floor_y + 80),
+            (x - 30, floor_y + 80),
+        ]
+        pygame.gfxdraw.filled_polygon(surface, pts, col)
+
+    # Side consoles
+    for cx in (240, WIDTH - 240):
+        pygame.draw.rect(surface, (35, 38, 42), (cx - 70, 560, 140, 200), border_radius=8)
+
+        for i in range(4):
+            blink = (t // 300 + i) % 3 == 0
+            lc = (80, 255, 120) if blink else (20, 90, 50)
+
+            pygame.gfxdraw.aacircle(surface, cx - 40 + i * 26, 590, 6, lc)
+            pygame.gfxdraw.filled_circle(surface, cx - 40 + i * 26, 590, 6, lc)
+
+    # Rising steam
+    for s in containment_steam:
+        alpha = int(90 * s["life"])
+        r = int(s["r"])
+
+        steam_surf = pygame.Surface((r * 2, r * 2), pygame.SRCALPHA)
+        steam_col = (200, 210, 215, alpha)
+
+        pygame.gfxdraw.aacircle(steam_surf, r, r, r, steam_col)
+        pygame.gfxdraw.filled_circle(steam_surf, r, r, r, steam_col)
+
+        surface.blit(steam_surf, (int(s["x"] - r), int(s["y"] - r)))
+
+        s["y"] -= s["speed"]
+        s["x"] += s["drift"]
+        s["life"] -= 0.006
+
+        if s["life"] <= 0:
+            s["life"] = 1.0
+            s["y"] = floor_y + 20
+            s["x"] = random.randint(150, WIDTH - 150)
+
+    # Electric sparks
+    for sp in containment_sparks:
+        sp["timer"] -= 1
+
+        if sp["timer"] <= 0:
+            sp["timer"] = random.randint(60, 180)
+            sp["x"] = random.randint(60, WIDTH - 60)
+            sp["y"] = random.randint(80, 550)
+
+        if sp["timer"] > 150:
+            spark_col = (255, 255, 180)
+
+            pygame.draw.line(
+                surface,
+                spark_col,
+                (sp["x"] - 6, sp["y"]),
+                (sp["x"] + 6, sp["y"] + 4),
+                2,
+            )
+
+            pygame.draw.line(
+                surface,
+                spark_col,
+                (sp["x"], sp["y"] - 6),
+                (sp["x"] + 4, sp["y"] + 6),
+                2,
+            )
 
 
 # =================================================================
