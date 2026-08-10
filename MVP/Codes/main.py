@@ -73,8 +73,6 @@ designs.vortex_scratch_surf = pygame.Surface((300, 150), pygame.SRCALPHA)
 pygame.display.set_caption("Training Simulation: Phantom Sweep")
 clock = pygame.time.Clock()
 
-active_entity_type = "GHOST"   # "GHOST" or "DECOY"
-
 designs.init_assets()
 assets.init_assets()
 
@@ -117,10 +115,18 @@ death_sequences = []
 AUDIO_LAPTOP_IP = "192.168.254.12" 
 audio_sender = udp_client.SimpleUDPClient(AUDIO_LAPTOP_IP, 9000) #Edit IP and port as needed
 
-# LIGHTING_LAPTOP_IP and lighting_sender removed — lighting.py manages its own connection
 
 total_ghosts_spawned = 0
-total_decoys_spawned = 0
+
+# NEW: counts successful ghost hits during stage 3 only.
+# Drives lighting.trigger_boss_sequence(), which the lighting module's
+# flow map says should fire once on the "8th ghost hit" of round 3.
+stage3_ghost_hits = 0
+
+# Cached crack shape for the boss blackout — generated once when the
+# trigger fires (see _generate_boss_crack), not recomputed every frame.
+boss_crack_main = None
+boss_crack_branches = None
 
 show_debug_camera = True
 
@@ -137,35 +143,6 @@ last_frame_pos_p2 = pygame.math.Vector2(WIDTH // 2, HEIGHT // 2)
 mp_tracking_locked = False       # True = game is frozen waiting for objects to return
 mp_lock_start_time = 0           # When the lock began (used to freeze the ghost timer)
 mp_ghost_timer_debt = 0          # Accumulated frozen time to add back to last_move_time
-
-# === NEW: CONTROLLED SPAWN POOL ===
-# === VERIFIED FIXED LAYOUT DECK ===
-# Exactly 50 GHOSTS, exactly 7 DECOYS. Total = 57 elements.
-spawn_pool = [
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",   # Decoy 1 (Index 6)
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",   # Decoy 2 (Index 13)
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",   # Decoy 3 (Index 20)
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",   # Decoy 4 (Index 27)
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",   # Decoy 5 (Index 34)
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",   # Decoy 6 (Index 41)
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",   # Decoy 7 (Index 48)
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",   # Clean Run to finish (49-55)
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY", 
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY", 
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY", 
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY", 
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY", 
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY", 
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY", 
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY", 
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",   # Final element (56)
-]
-pool_pointer = 0
 
 lightning_active, lightning_trigger_time, lightning_duration = False, 0, 0
 
@@ -185,6 +162,55 @@ reference_ok_sign = None  # Holds data from okhandsign.csv
 camera_fully_initialized = False
 camera_trigger_time = None  # CHANGED: Use None as an explicit "not started yet" state
 
+def _generate_boss_crack(width, height):
+    """Builds a jagged lightning-bolt-style crack down the middle of the
+    screen, plus a few branching offshoots, for the stage-3 boss blackout.
+    Generated once per boss trigger and cached, not recomputed every frame,
+    so the crack holds still instead of jittering."""
+    main_crack = []
+    x, y = width // 2, 0
+    while y < height:
+        main_crack.append((x, y))
+        y += random.randint(30, 70)
+        x += random.randint(-45, 45)
+        x = max(150, min(width - 150, x))
+    main_crack.append((x, height))
+
+    branches = []
+    for _ in range(4):
+        start_idx = random.randint(2, max(2, len(main_crack) - 3))
+        bx, by = main_crack[start_idx]
+        branch = [(bx, by)]
+        direction = random.choice([-1, 1])
+        for _ in range(random.randint(3, 6)):
+            bx += direction * random.randint(30, 90)
+            by += random.randint(20, 55)
+            branch.append((bx, by))
+        branches.append(branch)
+
+    return main_crack, branches
+
+
+def _draw_boss_crack(surface, main_crack, branches, t):
+    """Draws the cached crack with a soft pulsing glow, on a fully black
+    background, for the stage-3 boss trigger blackout."""
+    if not main_crack:
+        return
+    pulse = 0.7 + 0.3 * math.sin(t * 0.006)
+    glow_color = (int(90 * pulse), int(160 * pulse), int(255 * pulse))
+    core_color = (255, 255, 255)
+
+    # Soft glow pass (thicker, dimmer)
+    pygame.draw.lines(surface, glow_color, False, main_crack, 16)
+    for branch in branches:
+        pygame.draw.lines(surface, glow_color, False, branch, 9)
+
+    # Bright core crack on top
+    pygame.draw.lines(surface, core_color, False, main_crack, 5)
+    for branch in branches:
+        pygame.draw.lines(surface, core_color, False, branch, 3)
+
+
 # --- 3. MAIN RUNTIME LOOP ---
 while True:
     now = pygame.time.get_ticks()
@@ -197,7 +223,7 @@ while True:
         
         # Keep window alive and rendering while waiting
         screen.fill((10, 8, 20))
-        loading_txt = ui_font.render("Loading Whack-A-Ghost...", True, (100, 90, 120))
+        loading_txt = ui_font.render("Loading Live Target Grid...", True, (100, 90, 120))
         screen.blit(loading_txt, (WIDTH // 2 - 280, HEIGHT // 2))
         
         # Project to your monitor screen
@@ -234,8 +260,13 @@ while True:
         designs.draw_haunted_house(screen, lightning_active)
     elif is_tutorial_scene:
         designs.draw_library(screen, lightning_active)
+    elif current_stage == 3 and stage3_ghost_hits >= 8:
+        if boss_crack_main is None:
+            boss_crack_main, boss_crack_branches = _generate_boss_crack(WIDTH, HEIGHT)
+        screen.fill((0, 0, 0))
+        _draw_boss_crack(screen, boss_crack_main, boss_crack_branches, now)
     elif current_stage == 3:
-        designs.draw_containment_area(screen, lightning_active)
+        designs.draw_containment_area(screen)
     else:
         designs.draw_haunted_house(screen, lightning_active)
 
@@ -428,12 +459,14 @@ while True:
                     if new_stage != current_stage:
                         current_stage = new_stage
                         score = 0
-                        pool_pointer = 0
                         ghost_state = "UP"
                         ghost_y_offset = 0
                         stage_clear_hover = 0
                         stage_passed = False
                         death_sequences = []
+                        stage3_ghost_hits = 0
+                        boss_crack_main = None
+                        boss_crack_branches = None
                         start_ticks = now
                         last_move_time = now
                         game_phase = PHASE_GAMEPLAY
@@ -453,10 +486,9 @@ while True:
                 current_stage = 1; stage_clear_hover = 0; stage_passed = False
 
                 total_ghosts_spawned = 0
-                total_decoys_spawned = 0
-                
-                # === RESET POINTER FOR THE NEW GAME ===
-                pool_pointer = 0
+                stage3_ghost_hits = 0
+                boss_crack_main = None
+                boss_crack_branches = None
 
                 # === RESET MULTIPLAYER STATE ON RESTART ===
                 multiplayer_mode = True
@@ -533,10 +565,12 @@ while True:
         if stage_clear_hover >= tutorial.STAGE_HOVER_TARGET:
             current_stage += 1
             score = 0                # Reset score for the new stage
-            pool_pointer = 0         # Reset spawn pool for stage 3 decoys
             ghost_state = "UP"
             ghost_y_offset = 0
             stage_clear_hover = 0
+            stage3_ghost_hits = 0    # NEW: reset boss-trigger counter for the new stage
+            boss_crack_main = None
+            boss_crack_branches = None
             start_ticks = now
             game_phase = PHASE_GAMEPLAY
             lighting.on_tutorial_start()             # ← LIGHTING: re-enable lightning for next stage
@@ -549,41 +583,51 @@ while True:
     if game_phase in [PHASE_TUTORIAL, PHASE_TUTORIAL_MP, PHASE_GAMEPLAY] and not mp_tracking_locked and not is_paused:
         # 1. Run the Hit Engine Check (Forces clean integer values for pixel-perfect collision)
         int_cursor_pos = [int(cursor_vector.x), int(cursor_vector.y)]
-        
+
         # P1 hit check (green object)
         hit, tutorial_count, score, ghost_state, active_entity_type, death_sequences = gameplay.check_ghost_collisions(
             game_phase, int_cursor_pos, current_hole, ghost_state, ghost_y_offset, 
-            tutorial_count, score, death_sequences, now, active_entity_type, True
+            tutorial_count, score, death_sequences, now, "GHOST", True
         )
 
         # Increment combined MP tutorial counter if P1 landed a hit during MP training
         if hit and game_phase == PHASE_TUTORIAL_MP:
             mp_tutorial_count += 1
 
-        # Decoy hit — full room red flash
-        if hit and active_entity_type == "DECOY" and game_phase == PHASE_GAMEPLAY:
-            lighting.on_decoy_hit()
+        # === STAGE 3 BOSS TRIGGER TRACKING (P1) ===
+        if hit and game_phase == PHASE_GAMEPLAY and current_stage == 3:
+            stage3_ghost_hits += 1
+            print(f"[BOSS TRACKER] Stage 3 Phantom hit #{stage3_ghost_hits} (P1)")
 
         # P2 hit check (purple object) — only if multiplayer on and P1 didn't already land a hit
         if multiplayer_mode and not hit:
             int_cursor_pos_p2 = [int(cursor_vector_p2.x), int(cursor_vector_p2.y)]
             p2_hit, tutorial_count, score, ghost_state, active_entity_type, death_sequences = gameplay.check_ghost_collisions(
                 game_phase, int_cursor_pos_p2, current_hole, ghost_state, ghost_y_offset,
-                tutorial_count, score, death_sequences, now, active_entity_type, True
+                tutorial_count, score, death_sequences, now, "GHOST", True
             )
 
             # Increment combined MP tutorial counter if P2 landed a hit during MP training
             if p2_hit and game_phase == PHASE_TUTORIAL_MP:
                 mp_tutorial_count += 1
 
-            # P2 decoy hit
-            if p2_hit and active_entity_type == "DECOY" and game_phase == PHASE_GAMEPLAY:
-                lighting.on_decoy_hit()              # ← LIGHTING: same red flash for P2 decoy hit
+            # === STAGE 3 BOSS TRIGGER TRACKING (P2) ===
+            if p2_hit and game_phase == PHASE_GAMEPLAY and current_stage == 3:
+                stage3_ghost_hits += 1
+                print(f"[BOSS TRACKER] Stage 3 Phantom hit #{stage3_ghost_hits} (P2)")
+
+        # === LIGHTING: fire the boss sequence once the 8th stage-3 ghost hit lands ===
+        # trigger_boss_sequence() has its own internal one-shot guard, so it's safe
+        # to keep calling this every frame once the threshold is reached.
+        if game_phase == PHASE_GAMEPLAY and current_stage == 3 and stage3_ghost_hits >= 8:
+            audio.boss()
+            lighting.trigger_boss_sequence()
+            
         
         # 2. Points-Based Stage Completion Check (no timer gating anymore)
         if game_phase == PHASE_GAMEPLAY:
             # time_left is now just an elapsed-time readout for the UI —
-            # it no longer gates anything. Progression is purely score-based:
+            # it no longe.8r gates anything. Progression is purely score-based:
             # the moment you hit the stage target, you advance immediately.
             seconds_in_game = (now - start_ticks) // 1000
             time_left = seconds_in_game  # repurposed as "time elapsed" for display
@@ -602,7 +646,6 @@ while True:
                     lighting.on_stage_win(current_stage)   # ← LIGHTING: stage win dark gold
 
         # 3. Stage-Aware Move Interval & Positional Shifting
-        # Stage 3 also enables decoys via the spawn pool
         move_interval = STAGE_SPEEDS[current_stage]
         config.current_move_interval = move_interval
 
@@ -610,7 +653,7 @@ while True:
 
         # Update live positional logic coordinate shifts
         ghost_state, ghost_y_offset, current_hole, last_move_time, active_entity_type = gameplay.update_ghost_movement(
-            ghost_state, ghost_y_offset, current_hole, last_move_time, move_interval, now, game_phase, osc_client, active_entity_type, current_stage
+            ghost_state, ghost_y_offset, current_hole, last_move_time, move_interval, now, game_phase, osc_client, "GHOST", current_stage
         )
 
         # === NEW: FIRST TUTORIAL GHOST DISPLACEMENT GATE ===
@@ -619,63 +662,43 @@ while True:
             if current_hole == CENTER_HOLE_INDEX:
                 current_hole = random.choice([1, 2, 3, 4, 5])
 
-        # 4. === POOL ENFORCEMENT ENGINE ===
+        # Every spawn is a ghost now — no pool/decoy enforcement needed.
         if current_hole != old_hole:
-            
-            # TUTORIAL PHASES: Strictly spawn regular ghosts for practice
-            if game_phase in [PHASE_TUTORIAL, PHASE_TUTORIAL_MP]:
-                active_entity_type = "GHOST"
-                
-            # ACTIVE GAMEPLAY: Stage-aware entity spawning
-            else:
-                if current_stage < 3:
-                    # Stages 1 & 2: ghosts only, no decoys
-                    active_entity_type = "GHOST"
-                else:
-                    # Stage 3: use the fixed spawn pool with decoys
-                    if pool_pointer < len(spawn_pool):
-                        active_entity_type = spawn_pool[pool_pointer]
-                        if active_entity_type == "GHOST":
-                            total_ghosts_spawned += 1
-                        elif active_entity_type == "DECOY":
-                            total_decoys_spawned += 1
-                            print(f"[TRACKER] Decoy #{total_decoys_spawned} spawned at index {pool_pointer}")
-                        pool_pointer += 1
-                    else:
-                        ghost_state = "DOWN"
-                        active_entity_type = "NONE"
-
-        # === ANTI-REPETITION SAFETY LAYER (stage 3 only) ===
-        if game_phase == PHASE_GAMEPLAY and current_stage == 3 and pool_pointer > 0 and pool_pointer <= len(spawn_pool):
-            active_entity_type = spawn_pool[pool_pointer - 1]
+            total_ghosts_spawned += 1
 
     # =================================================================
     # === GRAPHICAL LAYOUT LAYERS ===
     # =================================================================
-    if game_phase == PHASE_GAMEPLAY:
+    # Recomputed fresh here (not reused from the scenery-routing check above)
+    # so it reflects this frame's hit engine update, not last frame's —
+    # otherwise the entities/UI would hide one frame later than the background.
+    boss_blackout_active = (current_stage == 3 and stage3_ghost_hits >= 8)
+
+    if game_phase == PHASE_GAMEPLAY and current_stage != 3:
         for pos in gameplay.hole_positions:
             designs.draw_smooth_ellipse(screen, pos[0], pos[1], 97, 45, (12, 10, 18))
             pygame.gfxdraw.aaellipse(screen, pos[0], pos[1], 105, 52, (55, 50, 70))
 
-    if game_phase in [PHASE_TUTORIAL, PHASE_TUTORIAL_MP, PHASE_GAMEPLAY]:
-        if active_entity_type == "DECOY" and game_phase == PHASE_GAMEPLAY:
-            designs.draw_jack_o_lantern(screen, current_hole, ghost_y_offset, now)
-        else:
-            designs.draw_ghost_entity(screen, current_hole, ghost_y_offset, now)
+    if game_phase in [PHASE_TUTORIAL, PHASE_TUTORIAL_MP, PHASE_GAMEPLAY] and not boss_blackout_active:
+        designs.draw_ghost_entity(screen, current_hole, ghost_y_offset, now)
 
-    designs.draw_death_sequence(screen, death_sequences, now)
+    if not boss_blackout_active:
+        designs.draw_death_sequence(screen, death_sequences, now)
     for death in death_sequences[:]:
         death["frame"] += 1
         if death["frame"] > 25: death_sequences.remove(death)
 
-    # Draw P1 crosshair (green)
-    designs.draw_crosshair(screen, cursor_pos)
+    if not boss_blackout_active:
+        # Draw P1 crosshair (green)
+        designs.draw_crosshair(screen, cursor_pos)
 
-    # Draw P2 crosshair (purple) — only when multiplayer is active
-    if multiplayer_mode:
-        designs.draw_crosshair(screen, cursor_pos_p2, color=(180, 0, 220))
+        # Draw P2 crosshair (purple) — only when multiplayer is active
+        if multiplayer_mode:
+            designs.draw_crosshair(screen, cursor_pos_p2, color=(180, 0, 220))
 
-    if game_phase in [PHASE_TUTORIAL, PHASE_TUTORIAL_MP, PHASE_INSTRUCT, PHASE_PREPARE]:
+    if boss_blackout_active:
+        pass  # fully blacked out — no UI drawn over the crack
+    elif game_phase in [PHASE_TUTORIAL, PHASE_TUTORIAL_MP, PHASE_INSTRUCT, PHASE_PREPARE]:
         tutorial.handle_tutorial_rendering(screen, ui_font, title_font, countdown_font, game_phase, tutorial_count, now, locals().get('ready_timer', 0), mp_tutorial_count)
         if game_phase == PHASE_INSTRUCT:
             addons.process_gesture_loading_bar(screen, thumbs_up_active, ui_font)
@@ -701,7 +724,7 @@ while True:
     # Rendered on top of everything else so it's always visible.
     # Only shown during PHASE_GAMEPLAY when the lock is active.
     # =================================================================
-    if multiplayer_mode and mp_tracking_locked and game_phase == PHASE_GAMEPLAY:
+    if multiplayer_mode and mp_tracking_locked and game_phase == PHASE_GAMEPLAY and not boss_blackout_active:
         p1_visible = tracked_cursor is not None and not is_too_small
         p2_visible = tracked_cursor_p2 is not None
 
@@ -732,7 +755,7 @@ while True:
     # =================================================================
     # === LIVE CAMERA DEBUG WINDOW LAYER (BOTTOM LEFT CORNER) ===
     # =================================================================
-    if game_phase in [PHASE_INTRO, PHASE_TUTORIAL, PHASE_TUTORIAL_MP, PHASE_GAMEPLAY, PHASE_INSTRUCT] and rgb_frame is not None and show_debug_camera:
+    if game_phase in [PHASE_INTRO, PHASE_TUTORIAL, PHASE_TUTORIAL_MP, PHASE_GAMEPLAY, PHASE_INSTRUCT] and rgb_frame is not None and show_debug_camera and not boss_blackout_active:
         camera_surface = pygame.surfarray.make_surface(rgb_frame.swapaxes(0, 1))
         
         debug_w, debug_h = 320, 240
