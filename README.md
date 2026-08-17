@@ -143,6 +143,16 @@ flowchart TD
     style REAPER fill:#1e293b,stroke:#64748b,color:#fff
     style LISA fill:#1e293b,stroke:#64748b,color:#fff
 ```
+## 4. Bill Of Materials (BOM)
+| Item | Description |
+| :--- | :--- |
+| `USB Webcam/Built-in webcam` | Used to track your hand/object movements |
+| `External Display` | For extended mode. |
+| `Laptop/PC` | To run the game codes. |
+| `Lighting fixtures/Audio Speakers` | For a more immersive experience. |
+| `3D Printed Blasters` | Used to play the game.|
+| `Fluorescent Acrylic Green and Blue Paint` | Used for colour tracking. |
+| `Paintbrush` | Used to paint the front of the blasters. |
 
 ## Notes
 
