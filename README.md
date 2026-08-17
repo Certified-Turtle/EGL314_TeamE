@@ -1,5 +1,5 @@
 # EGL314
-## Phantom Sweep OpenCV + MediaPipe Game (MVP)  
+## Phantom Sweep OpenCV + MediaPipe Game (Final)  
 An interactive game developed in python that integrates OpenCV and Mediapipe (Real time hand/colour tracking), GrandMA3 lighting fixtures and wall mounted speakers via L-ISA and Reaper.
 
 ---
@@ -12,6 +12,7 @@ An interactive game developed in python that integrates OpenCV and Mediapipe (Re
     - [2.1 What each dependency does]
 - [3. Game Files]
     - [3.1 Game Flow]
+- [4. Bill Of Materials (BOM)]
 - Notes
 
 ## 1. Setup
@@ -174,8 +175,8 @@ Currently, our team collaborated with other teams to create props that can be pa
 
 ### [Click here to view the STL files for 3D printing](MVP/Documentation/Assets/)
 
-![Phantom Blasters](MVP/Documentation/Images/OpenCVBlaster.jpg)
-![Phantom Blasters](MVP/Documentation/Images/OpenCVBlaster2.jpg)
+![Phantom Blasters](Final/Documentation/Images/GreenBlaster.jpg)
+![Phantom Blasters](Final/Documentation/Images/BlueBlaster.jpg)
 
 
 ## Connections to GrandMA3/Reaper + L-ISA
