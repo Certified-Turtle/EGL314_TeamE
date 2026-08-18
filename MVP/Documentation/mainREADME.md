@@ -119,14 +119,13 @@ designs.vortex_scratch_surf = pygame.Surface((300, 150), pygame.SRCALPHA)
 pygame.display.set_caption("Training Simulation: Phantom Sweep")
 clock = pygame.time.Clock()
 
-active_entity_type = "GHOST"   # "GHOST" or "DECOY"
-
 designs.init_assets()
 assets.init_assets()
 
 ui_font = pygame.font.SysFont("Courier New", 36, bold=True)
 title_font = pygame.font.SysFont("Courier New", 68, bold=True)
 countdown_font = pygame.font.SysFont("Courier New", 180, bold=True)
+
 ```
 
 This section of the code is used because we display our game on a secondary large display, querying the system hardware and opens the game window to the secondary display index (in our case a monitor) in borderless fullscreen mode.
@@ -137,7 +136,6 @@ All gameplay is rendered in onto a fixed 1920 X 1080 virtual screen before being
 ## Section 2
 
 ```bash
-
 # =================================================================
 # === 2. GAME STATE VARIABLE COMPARTMENTS ===
 # =================================================================
@@ -157,9 +155,9 @@ hover_start_progress = 0
 
 # === STAGE SYSTEM ===
 current_stage = 1                          # 1, 2, or 3
-STAGE_DURATION = 30                        # Seconds per stage
-STAGE_TARGETS = {1: 30, 2: 20, 3: 10}    # Score needed to pass each stage
-STAGE_SPEEDS = {1: 1300, 2: 750, 3: 250}  # Move interval ms — noticeably faster each stage
+STAGE_DURATION = 30                        # Unused for gating now — kept only in case you want it back
+STAGE_TARGETS = {1: 30, 2: 20, 3: 10}    # Score needed to advance — reaching this instantly clears the stage
+STAGE_SPEEDS = {1: 1300, 2: 900, 3: 700}  # Move interval ms — noticeably faster each stage
 stage_clear_hover = 0                      # Hover progress for stage clear button
 stage_passed = False                       # Whether player hit the target this stage
 
@@ -169,13 +167,22 @@ ghost_y_offset = 0
 ghost_state = "UP"
 death_sequences = []
 
+
 AUDIO_LAPTOP_IP = "192.168.254.12" 
 audio_sender = udp_client.SimpleUDPClient(AUDIO_LAPTOP_IP, 9000) #Edit IP and port as needed
 
-# LIGHTING_LAPTOP_IP and lighting_sender removed — lighting.py manages its own connection
 
 total_ghosts_spawned = 0
-total_decoys_spawned = 0
+
+# NEW: counts successful ghost hits during stage 3 only.
+# Drives lighting.trigger_boss_sequence(), which the lighting module's
+# flow map says should fire once on the "8th ghost hit" of round 3.
+stage3_ghost_hits = 0
+
+# Cached crack shape for the boss blackout — generated once when the
+# trigger fires (see _generate_boss_crack), not recomputed every frame.
+boss_crack_main = None
+boss_crack_branches = None
 
 show_debug_camera = True
 
@@ -192,34 +199,6 @@ last_frame_pos_p2 = pygame.math.Vector2(WIDTH // 2, HEIGHT // 2)
 mp_tracking_locked = False       # True = game is frozen waiting for objects to return
 mp_lock_start_time = 0           # When the lock began (used to freeze the ghost timer)
 mp_ghost_timer_debt = 0          # Accumulated frozen time to add back to last_move_time
-
-# === NEW: CONTROLLED SPAWN POOL ===
-# === VERIFIED FIXED LAYOUT DECK ===
-# Exactly 50 GHOSTS, exactly 7 DECOYS. Total = 57 elements.
-spawn_pool = [
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",   # Decoy 1 (Index 6)
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",   # Decoy 2 (Index 13)
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",   # Decoy 3 (Index 20)
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",   # Decoy 4 (Index 27)
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",   # Decoy 5 (Index 34)
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",   # Decoy 6 (Index 41)
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",   # Decoy 7 (Index 48)
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",   # Clean Run to finish (49-55)
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY", 
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY", 
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY", 
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY", 
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY", 
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY", 
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY", 
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY", 
-    "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "GHOST", "DECOY",                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       # Final element (56)
-]
-pool_pointer = 0
 
 lightning_active, lightning_trigger_time, lightning_duration = False, 0, 0
 
@@ -239,11 +218,59 @@ reference_ok_sign = None  # Holds data from okhandsign.csv
 camera_fully_initialized = False
 camera_trigger_time = None  # CHANGED: Use None as an explicit "not started yet" state
 
+def _generate_boss_crack(width, height):
+    """Builds a jagged lightning-bolt-style crack down the middle of the
+    screen, plus a few branching offshoots, for the stage-3 boss blackout.
+    Generated once per boss trigger and cached, not recomputed every frame,
+    so the crack holds still instead of jittering."""
+    main_crack = []
+    x, y = width // 2, 0
+    while y < height:
+        main_crack.append((x, y))
+        y += random.randint(30, 70)
+        x += random.randint(-45, 45)
+        x = max(150, min(width - 150, x))
+    main_crack.append((x, height))
+
+    branches = []
+    for _ in range(4):
+        start_idx = random.randint(2, max(2, len(main_crack) - 3))
+        bx, by = main_crack[start_idx]
+        branch = [(bx, by)]
+        direction = random.choice([-1, 1])
+        for _ in range(random.randint(3, 6)):
+            bx += direction * random.randint(30, 90)
+            by += random.randint(20, 55)
+            branch.append((bx, by))
+        branches.append(branch)
+
+    return main_crack, branches
+
+
+def _draw_boss_crack(surface, main_crack, branches, t):
+    """Draws the cached crack with a soft pulsing glow, on a fully black
+    background, for the stage-3 boss trigger blackout."""
+    if not main_crack:
+        return
+    pulse = 0.7 + 0.3 * math.sin(t * 0.006)
+    glow_color = (int(90 * pulse), int(160 * pulse), int(255 * pulse))
+    core_color = (255, 255, 255)
+
+    # Soft glow pass (thicker, dimmer)
+    pygame.draw.lines(surface, glow_color, False, main_crack, 16)
+    for branch in branches:
+        pygame.draw.lines(surface, glow_color, False, branch, 9)
+
+    # Bright core crack on top
+    pygame.draw.lines(surface, core_color, False, main_crack, 5)
+    for branch in branches:
+        pygame.draw.lines(surface, core_color, False, branch, 3)
+
 ```
 
 This portion of the code handles the mutiple game states. The game is built around tracking mutiple operational game phases that handle initialization states, multi-player onboarding tutorials, skeletal calibration checkpoints, active gameplay loops, and evaluation screens into isolated execution logical paths
 
-The code also creates the target scores per stage, and scales ghost movement stage by stage. Both increasing or decreasing relative to the stage.
+The code also creates the target scores per stage, and scales ghost movement speed stage by stage. Both increasing relative to the stage.
 
 Ip and port of the laptops controlling audio and lights is also contained here when sending via osc.
 
@@ -262,7 +289,7 @@ while True:
         
         # Keep window alive and rendering while waiting
         screen.fill((10, 8, 20))
-        loading_txt = ui_font.render("Loading Whack-A-Ghost...", True, (100, 90, 120))
+        loading_txt = ui_font.render("Loading Live Target Grid...", True, (100, 90, 120))
         screen.blit(loading_txt, (WIDTH // 2 - 280, HEIGHT // 2))
         
         # Project to your monitor screen
@@ -274,6 +301,7 @@ while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
                 lighting.on_game_close()             # ← LIGHTING: all lights off before exit
+                color_logger.close_color_logger()    # ← NEW: flush and close the HSV/RGB log
                 pygame.quit(); sys.exit()
         
         # Once 1 second passes, safely inject the camera stream
@@ -282,6 +310,7 @@ while True:
             reference_ok_sign = opencv.load_relational_gesture_csv("okhandsign.csv")
             camera_fully_initialized = True
             lighting.init()                          # ← LIGHTING: spooky atmosphere + spotlight on load
+            color_logger.init_color_logger("hsv_rgb_log.csv")  # ← NEW: start HSV/RGB logging
             last_move_time = pygame.time.get_ticks()
         
         clock.tick(60)
@@ -297,9 +326,16 @@ while True:
         designs.draw_haunted_house(screen, lightning_active)
     elif is_tutorial_scene:
         designs.draw_library(screen, lightning_active)
+    elif current_stage == 3 and stage3_ghost_hits >= 8:
+        if boss_crack_main is None:
+            boss_crack_main, boss_crack_branches = _generate_boss_crack(WIDTH, HEIGHT)
+        screen.fill((0, 0, 0))
+        _draw_boss_crack(screen, boss_crack_main, boss_crack_branches, now)
+    elif current_stage == 3:
+        designs.draw_containment_area(screen)
     else:
         designs.draw_haunted_house(screen, lightning_active)
-        
+
     # =================================================================
     # === COMPRESSED COMPUTER VISION PIPELINE MATRIX ===
     # =================================================================
@@ -311,7 +347,8 @@ while True:
         list(cursor_pos), 
         WIDTH, 
         HEIGHT, 
-        run_skeletal_check=need_hand_skeleton
+        run_skeletal_check=need_hand_skeleton,
+        start_time_ms=start_ticks
     )
     
     rgb_frame = None
@@ -447,7 +484,7 @@ while True:
         
         # Keep window alive and rendering while waiting
         screen.fill((10, 8, 20))
-        loading_txt = ui_font.render("Loading Whack-A-Ghost...", True, (100, 90, 120))
+        loading_txt = ui_font.render("Loading Live Target Grid...", True, (100, 90, 120))
         screen.blit(loading_txt, (WIDTH // 2 - 280, HEIGHT // 2))
         
         # Project to your monitor screen
@@ -459,6 +496,7 @@ while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
                 lighting.on_game_close()             # ← LIGHTING: all lights off before exit
+                color_logger.close_color_logger()    # ← NEW: flush and close the HSV/RGB log
                 pygame.quit(); sys.exit()
         
         # Once 1 second passes, safely inject the camera stream
@@ -467,6 +505,7 @@ while True:
             reference_ok_sign = opencv.load_relational_gesture_csv("okhandsign.csv")
             camera_fully_initialized = True
             lighting.init()                          # ← LIGHTING: spooky atmosphere + spotlight on load
+            color_logger.init_color_logger("hsv_rgb_log.csv")  # ← NEW: start HSV/RGB logging
             last_move_time = pygame.time.get_ticks()
         
         clock.tick(60)
@@ -482,6 +521,13 @@ while True:
         designs.draw_haunted_house(screen, lightning_active)
     elif is_tutorial_scene:
         designs.draw_library(screen, lightning_active)
+    elif current_stage == 3 and stage3_ghost_hits >= 8:
+        if boss_crack_main is None:
+            boss_crack_main, boss_crack_branches = _generate_boss_crack(WIDTH, HEIGHT)
+        screen.fill((0, 0, 0))
+        _draw_boss_crack(screen, boss_crack_main, boss_crack_branches, now)
+    elif current_stage == 3:
+        designs.draw_containment_area(screen)
     else:
         designs.draw_haunted_house(screen, lightning_active)
 ```
@@ -489,7 +535,7 @@ while True:
 The game will boot up on an isolated loading scene loop for 1 second to keep the operating system frame pipeline alive while the OpenCV and CSV gesture files initialize on a background tick thread.
 
 ```bash
-# =================================================================
+ # =================================================================
     # === COMPRESSED COMPUTER VISION PIPELINE MATRIX ===
     # =================================================================
     # Tell opencv.py to ONLY run heavy MediaPipe skeleton tracking during PHASE_INSTRUCT
@@ -500,7 +546,8 @@ The game will boot up on an isolated loading scene loop for 1 second to keep the
         list(cursor_pos), 
         WIDTH, 
         HEIGHT, 
-        run_skeletal_check=need_hand_skeleton
+        run_skeletal_check=need_hand_skeleton,
+        start_time_ms=start_ticks
     )
     
     rgb_frame = None
@@ -589,10 +636,10 @@ The game will boot up on an isolated loading scene loop for 1 second to keep the
 
 This portion of the code makes it such that gesture tracking is only used during the insrtuct phase. 
 
-The code also makes it such that system captures raw coordinates from opencv.py (Green object for P1, Purple for P2) and uses Linear Interpolation (LERP) to smooth cursor movements, eliminating tracking jitter. This helps smoothn cursor movement during gameplay making it feel more controllable.
+The code also makes it such that system captures raw coordinates from opencv.py (Green object for P1, Purple for P2) and uses Linear Interpolation (LERP) to smooth cursor movements, eliminating tracking jitter. This helps smoothen cursor movement during gameplay making it feel more controllable.
 
 ```bash
-# =================================================================
+    # =================================================================
     # === MULTIPLAYER TRACKING LOCK ENGINE ===
     # Freezes gameplay if either object drops out of camera view.
     # Automatically unfreezes the moment both are visible again.
@@ -630,7 +677,7 @@ The code also makes it such that system captures raw coordinates from opencv.py 
 
 ```
 
-This portion of the code is the mutiplayer lock, it makes it such that gameplay will pause if, the green object, purple object, or both objects are out of camera detection, displaying a warning message according to whichever is colour is the one not on camera.
+This portion of the code is the multiplayer lock, it makes it such that gameplay will pause if, the green object, purple object, or both objects are out of camera detection, displaying a warning message according to whichever is colour is the one not on camera.
 
 ---
 
@@ -640,6 +687,7 @@ This portion of the code is the mutiplayer lock, it makes it such that gameplay 
     for event in pygame.event.get():
         if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
             lighting.on_game_close()
+            color_logger.close_color_logger()    # ← NEW: flush and close the HSV/RGB log
             pygame.quit(); sys.exit()
         
     # === TOGGLE DETECTOR ===
@@ -677,6 +725,9 @@ This portion of the code is the mutiplayer lock, it makes it such that gameplay 
                     print(f"[CALIBRATION] Saved snapshot → {filename}")
                 else:
                     print("[CALIBRATION] No camera frame available to save yet.")
+
+            if event.key == pygame.K_o:
+                lighting.on_intro_transition()
             
             # === DEBUG: STAGE SKIP BYPASS (LEFT = back, RIGHT = forward) ===
             if event.key in (pygame.K_LEFT, pygame.K_RIGHT):
@@ -688,12 +739,14 @@ This portion of the code is the mutiplayer lock, it makes it such that gameplay 
                     if new_stage != current_stage:
                         current_stage = new_stage
                         score = 0
-                        pool_pointer = 0
                         ghost_state = "UP"
                         ghost_y_offset = 0
                         stage_clear_hover = 0
                         stage_passed = False
                         death_sequences = []
+                        stage3_ghost_hits = 0
+                        boss_crack_main = None
+                        boss_crack_branches = None
                         start_ticks = now
                         last_move_time = now
                         game_phase = PHASE_GAMEPLAY
@@ -704,6 +757,7 @@ This portion of the code is the mutiplayer lock, it makes it such that gameplay 
         if game_phase == PHASE_GAMEOVER and event.type == pygame.KEYDOWN:
             if event.key == pygame.K_q:
                 lighting.on_game_close()             # ← LIGHTING: all lights off before exit
+                color_logger.close_color_logger()    # ← NEW: flush and close the HSV/RGB log
                 pygame.quit(); sys.exit()
             if event.key == pygame.K_r: 
                 score, time_left, start_ticks, current_hole, _ = restart_quit.reset_game()
@@ -712,10 +766,9 @@ This portion of the code is the mutiplayer lock, it makes it such that gameplay 
                 current_stage = 1; stage_clear_hover = 0; stage_passed = False
 
                 total_ghosts_spawned = 0
-                total_decoys_spawned = 0
-                
-                # === RESET POINTER FOR THE NEW GAME ===
-                pool_pointer = 0
+                stage3_ghost_hits = 0
+                boss_crack_main = None
+                boss_crack_branches = None
 
                 # === RESET MULTIPLAYER STATE ON RESTART ===
                 multiplayer_mode = True
@@ -803,10 +856,12 @@ This adds a bunch of keys, both for the purpose of testing.
         if stage_clear_hover >= tutorial.STAGE_HOVER_TARGET:
             current_stage += 1
             score = 0                # Reset score for the new stage
-            pool_pointer = 0         # Reset spawn pool for stage 3 decoys
             ghost_state = "UP"
             ghost_y_offset = 0
             stage_clear_hover = 0
+            stage3_ghost_hits = 0    # NEW: reset boss-trigger counter for the new stage
+            boss_crack_main = None
+            boss_crack_branches = None
             start_ticks = now
             game_phase = PHASE_GAMEPLAY
             lighting.on_tutorial_start()             # ← LIGHTING: re-enable lightning for next stage
@@ -819,66 +874,69 @@ This adds a bunch of keys, both for the purpose of testing.
     if game_phase in [PHASE_TUTORIAL, PHASE_TUTORIAL_MP, PHASE_GAMEPLAY] and not mp_tracking_locked and not is_paused:
         # 1. Run the Hit Engine Check (Forces clean integer values for pixel-perfect collision)
         int_cursor_pos = [int(cursor_vector.x), int(cursor_vector.y)]
-        
+
         # P1 hit check (green object)
         hit, tutorial_count, score, ghost_state, active_entity_type, death_sequences = gameplay.check_ghost_collisions(
             game_phase, int_cursor_pos, current_hole, ghost_state, ghost_y_offset, 
-            tutorial_count, score, death_sequences, now, active_entity_type, True
+            tutorial_count, score, death_sequences, now, "GHOST", True
         )
 
         # Increment combined MP tutorial counter if P1 landed a hit during MP training
         if hit and game_phase == PHASE_TUTORIAL_MP:
             mp_tutorial_count += 1
 
-        # Decoy hit — full room red flash
-        if hit and active_entity_type == "DECOY" and game_phase == PHASE_GAMEPLAY:
-            lighting.on_decoy_hit()
+        # === STAGE 3 BOSS TRIGGER TRACKING (P1) ===
+        if hit and game_phase == PHASE_GAMEPLAY and current_stage == 3:
+            stage3_ghost_hits += 1
+            print(f"[BOSS TRACKER] Stage 3 Phantom hit #{stage3_ghost_hits} (P1)")
 
         # P2 hit check (purple object) — only if multiplayer on and P1 didn't already land a hit
         if multiplayer_mode and not hit:
             int_cursor_pos_p2 = [int(cursor_vector_p2.x), int(cursor_vector_p2.y)]
             p2_hit, tutorial_count, score, ghost_state, active_entity_type, death_sequences = gameplay.check_ghost_collisions(
                 game_phase, int_cursor_pos_p2, current_hole, ghost_state, ghost_y_offset,
-                tutorial_count, score, death_sequences, now, active_entity_type, True
+                tutorial_count, score, death_sequences, now, "GHOST", True
             )
 
             # Increment combined MP tutorial counter if P2 landed a hit during MP training
             if p2_hit and game_phase == PHASE_TUTORIAL_MP:
                 mp_tutorial_count += 1
 
-            # P2 decoy hit
-            if p2_hit and active_entity_type == "DECOY" and game_phase == PHASE_GAMEPLAY:
-                lighting.on_decoy_hit()              # ← LIGHTING: same red flash for P2 decoy hit
+            # === STAGE 3 BOSS TRIGGER TRACKING (P2) ===
+            if p2_hit and game_phase == PHASE_GAMEPLAY and current_stage == 3:
+                stage3_ghost_hits += 1
+                print(f"[BOSS TRACKER] Stage 3 Phantom hit #{stage3_ghost_hits} (P2)")
+
+        # === LIGHTING: fire the boss sequence once the 8th stage-3 ghost hit lands ===
+        # trigger_boss_sequence() has its own internal one-shot guard, so it's safe
+        # to keep calling this every frame once the threshold is reached.
+        if game_phase == PHASE_GAMEPLAY and current_stage == 3 and stage3_ghost_hits >= 8:
+            audio.boss()
+            lighting.trigger_boss_sequence()
+            
         
-        # 2. Match Timing & Stage Completion Check
+        # 2. Points-Based Stage Completion Check (no timer gating anymore)
         if game_phase == PHASE_GAMEPLAY:
+            # time_left is now just an elapsed-time readout for the UI —
+            # it no longe.8r gates anything. Progression is purely score-based:
+            # the moment you hit the stage target, you advance immediately.
             seconds_in_game = (now - start_ticks) // 1000
-            time_left = max(0, STAGE_DURATION - seconds_in_game)
+            time_left = seconds_in_game  # repurposed as "time elapsed" for display
 
-            lighting.on_countdown(time_left)         # ← LIGHTING: handles 10s shift + per-second flash
-
-            if time_left == 0:
-                # Stage time is up — check if target was met
-                stage_passed = score >= STAGE_TARGETS[current_stage]
+            if score >= STAGE_TARGETS[current_stage]:
+                # Points-based progression: hitting the target always counts
+                # as a pass. There is no fail/timeout state anymore.
+                stage_passed = True
                 if current_stage == 3:
-                    # Final stage done — go to game over regardless
                     game_phase = PHASE_GAMEOVER
-                    if stage_passed:
-                        lighting.on_win()            # ← LIGHTING: final win amber gold
-                    else:
-                        lighting.on_lose()           # ← LIGHTING: final lose doom heartbeat
+                    lighting.on_win()            # ← LIGHTING: final win amber gold
                 else:
                     game_phase = PHASE_STAGE_CLEAR
                     stage_clear_hover = 0
-                    if stage_passed:
-                        audio.win_pt()         # ← AUDIO: stage win sound effect
-                        lighting.on_stage_win(current_stage)   # ← LIGHTING: stage win dark gold
-                    else:
-                        audio.lose_pt()        # ← AUDIO: stage lose sound effect
-                        lighting.on_stage_lose(current_stage)  # ← LIGHTING: stage lose dark red
+                    audio.win_pt()         # ← AUDIO: stage win sound effect
+                    lighting.on_stage_win(current_stage)   # ← LIGHTING: stage win dark gold
 
         # 3. Stage-Aware Move Interval & Positional Shifting
-        # Stage 3 also enables decoys via the spawn pool
         move_interval = STAGE_SPEEDS[current_stage]
         config.current_move_interval = move_interval
 
@@ -886,7 +944,7 @@ This adds a bunch of keys, both for the purpose of testing.
 
         # Update live positional logic coordinate shifts
         ghost_state, ghost_y_offset, current_hole, last_move_time, active_entity_type = gameplay.update_ghost_movement(
-            ghost_state, ghost_y_offset, current_hole, last_move_time, move_interval, now, game_phase, osc_client, active_entity_type, current_stage
+            ghost_state, ghost_y_offset, current_hole, last_move_time, move_interval, now, game_phase, osc_client, "GHOST", current_stage
         )
 
         # === NEW: FIRST TUTORIAL GHOST DISPLACEMENT GATE ===
@@ -895,111 +953,14 @@ This adds a bunch of keys, both for the purpose of testing.
             if current_hole == CENTER_HOLE_INDEX:
                 current_hole = random.choice([1, 2, 3, 4, 5])
 
-        # 4. === POOL ENFORCEMENT ENGINE ===
+        # Every spawn is a ghost now — no pool/decoy enforcement needed.
         if current_hole != old_hole:
-            
-            # TUTORIAL PHASES: Strictly spawn regular ghosts for practice
-            if game_phase in [PHASE_TUTORIAL, PHASE_TUTORIAL_MP]:
-                active_entity_type = "GHOST"
-                
-            # ACTIVE GAMEPLAY: Stage-aware entity spawning
-            else:
-                if current_stage < 3:
-                    # Stages 1 & 2: ghosts only, no decoys
-                    active_entity_type = "GHOST"
-                else:
-                    # Stage 3: use the fixed spawn pool with decoys
-                    if pool_pointer < len(spawn_pool):
-                        active_entity_type = spawn_pool[pool_pointer]
-                        if active_entity_type == "GHOST":
-                            total_ghosts_spawned += 1
-                        elif active_entity_type == "DECOY":
-                            total_decoys_spawned += 1
-                            print(f"[TRACKER] Decoy #{total_decoys_spawned} spawned at index {pool_pointer}")
-                        pool_pointer += 1
-                    else:
-                        ghost_state = "DOWN"
-                        active_entity_type = "NONE"
-
-        # === ANTI-REPETITION SAFETY LAYER (stage 3 only) ===
-        if game_phase == PHASE_GAMEPLAY and current_stage == 3 and pool_pointer > 0 and pool_pointer <= len(spawn_pool):
-            active_entity_type = spawn_pool[pool_pointer - 1]
+            total_ghosts_spawned += 1
 ```
 
-Firstly, the code creates the routing of game phases creating the condition and route as to how the game moves from state to state incuding the line of  that code makes it such that during the instruct phase, gesture tracking is used such that only by making a specifc handsign can the player move forward. See from:
-```bash
-# Phase State Machine Routing Engine
-    thumbs_up_active = False
-    if game_phase == PHASE_INTRO:
-        hover_start_progress = start_button.handle_intro_phase(screen, title_font, ui_font, cursor_pos, cursor_pos_p2, hover_start_progress)
-        if hover_start_progress >= start_button.HOVER_TO_START_FRAMES:
-            game_phase = PHASE_TUTORIAL_MP
-            hover_start_progress = 0
-            last_move_time = now
+Firstly, the code creates the routing of game phases creating the condition and route as to how the game moves from state to state including the line of  that code makes it such that during the instruct phase, gesture tracking is used such that only by making a specific hand sign can the player move forward.
 
-    elif game_phase == PHASE_TUTORIAL and tutorial_count >= 5:
-        game_phase = PHASE_INSTRUCT
-        lighting.on_thumbsup_check()                 # ← LIGHTING: calm white/blue for gesture
-
-    elif game_phase == PHASE_TUTORIAL_MP and mp_tutorial_count >= 10:
-        game_phase = PHASE_INSTRUCT
-        lighting.on_thumbsup_check()                 # ← LIGHTING: same for multiplayer path
-        
-    elif game_phase == PHASE_INSTRUCT:
-        # 1. Broad Level Pipeline Check
-        if not cv_data:
-            print("[PHASE_INSTRUCT] STAGE 1 FAIL: cv_data package is empty or False.")
-        elif cv_data[2] is None:
-            print("[PHASE_INSTRUCT] STAGE 2 FAIL: Camera works, but MediaPipe sees NO hand.")
-        else:
-            print("[PHASE_INSTRUCT] STAGE 3 SUCCESS: Hand found! Pulling landmarks...")
-            landmarks = cv_data[2].landmark
-            
-            # Run the matching engine
-            if opencv.check_csv_ok_sign(landmarks, reference_ok_sign, threshold=3.0):
-                print("[PHASE_INSTRUCT] STAGE 4 SUCCESS: CSV Match accepted!")
-                thumbs_up_active = True
-            else:
-                print("[PHASE_INSTRUCT] STAGE 4 FAIL: Hand geometry does not match your CSV data values.")
-        
-        if thumbs_up_active:
-            config.gesture_hold_progress = min(config.GESTURE_HOLD_TARGET, config.gesture_hold_progress + 3)
-            if config.gesture_hold_progress >= config.GESTURE_HOLD_TARGET:
-                config.gesture_hold_progress = 0  
-                game_phase = PHASE_PREPARE
-                ready_timer = now
-                lighting.on_thumbsup_accepted()      # ← LIGHTING: restore spooky, lightning on
-        else:
-            config.gesture_hold_progress = max(0, config.gesture_hold_progress - 2)
-
-    elif game_phase == PHASE_PREPARE and (now - ready_timer) > 5000:
-        game_phase = PHASE_GAMEPLAY
-        start_ticks = now
-        score = 0                # NEW: clear any score accumulated during tutorial hits
-        lighting.on_tutorial_start()                 # ← LIGHTING: enable lightning for gameplay
-
-    elif game_phase == PHASE_STAGE_CLEAR:
-    # Hover-to-continue button for stage clear screen
-    # Either P1 (green) or P2 (purple) crosshair can push the bar forward
-        p2_pos_for_hover = cursor_pos_p2 if multiplayer_mode else None
-        stage_clear_hover = tutorial.handle_stage_clear_screen(
-            screen, ui_font, title_font, cursor_pos, p2_pos_for_hover, score,
-            current_stage, stage_passed, STAGE_TARGETS, stage_clear_hover
-    )
-        if stage_clear_hover >= tutorial.STAGE_HOVER_TARGET:
-            current_stage += 1
-            score = 0                # Reset score for the new stage
-            pool_pointer = 0         # Reset spawn pool for stage 3 decoys
-            ghost_state = "UP"
-            ghost_y_offset = 0
-            stage_clear_hover = 0
-            start_ticks = now
-            game_phase = PHASE_GAMEPLAY
-            lighting.on_tutorial_start()             # ← LIGHTING: re-enable lightning for next stage
-            print(f"[STAGE] Advancing to stage {current_stage}")
-```
-
-Next is the hit collision engine. During gameplay, the game checks to register integer boundary overlaps for both players. Hitting a target adds points, but hitting a DECOY triggers a hardware-linked environment alarm event accordingly. Basically controlling what should and should not happen when hitting either a ghost or decoy.
+Next is the hit collision engine. During gameplay, the game checks to register integer boundary overlaps for both players. Basically controlling what should and should not happen when hitting a ghost, such that hitting a ghost adds 1 point.
 
 ---
 ### Grapics
@@ -1007,30 +968,36 @@ Next is the hit collision engine. During gameplay, the game checks to register i
 # =================================================================
     # === GRAPHICAL LAYOUT LAYERS ===
     # =================================================================
-    if game_phase == PHASE_GAMEPLAY:
+    # Recomputed fresh here (not reused from the scenery-routing check above)
+    # so it reflects this frame's hit engine update, not last frame's —
+    # otherwise the entities/UI would hide one frame later than the background.
+    boss_blackout_active = (current_stage == 3 and stage3_ghost_hits >= 8)
+
+    if game_phase == PHASE_GAMEPLAY and current_stage != 3:
         for pos in gameplay.hole_positions:
             designs.draw_smooth_ellipse(screen, pos[0], pos[1], 97, 45, (12, 10, 18))
             pygame.gfxdraw.aaellipse(screen, pos[0], pos[1], 105, 52, (55, 50, 70))
 
-    if game_phase in [PHASE_TUTORIAL, PHASE_TUTORIAL_MP, PHASE_GAMEPLAY]:
-        if active_entity_type == "DECOY" and game_phase == PHASE_GAMEPLAY:
-            designs.draw_jack_o_lantern(screen, current_hole, ghost_y_offset, now)
-        else:
-            designs.draw_ghost_entity(screen, current_hole, ghost_y_offset, now)
+    if game_phase in [PHASE_TUTORIAL, PHASE_TUTORIAL_MP, PHASE_GAMEPLAY] and not boss_blackout_active:
+        designs.draw_ghost_entity(screen, current_hole, ghost_y_offset, now)
 
-    designs.draw_death_sequence(screen, death_sequences, now)
+    if not boss_blackout_active:
+        designs.draw_death_sequence(screen, death_sequences, now)
     for death in death_sequences[:]:
         death["frame"] += 1
         if death["frame"] > 25: death_sequences.remove(death)
 
-    # Draw P1 crosshair (green)
-    designs.draw_crosshair(screen, cursor_pos)
+    if not boss_blackout_active:
+        # Draw P1 crosshair (green)
+        designs.draw_crosshair(screen, cursor_pos)
 
-    # Draw P2 crosshair (purple) — only when multiplayer is active
-    if multiplayer_mode:
-        designs.draw_crosshair(screen, cursor_pos_p2, color=(180, 0, 220))
+        # Draw P2 crosshair (purple) — only when multiplayer is active
+        if multiplayer_mode:
+            designs.draw_crosshair(screen, cursor_pos_p2, color=(180, 0, 220))
 
-    if game_phase in [PHASE_TUTORIAL, PHASE_TUTORIAL_MP, PHASE_INSTRUCT, PHASE_PREPARE]:
+    if boss_blackout_active:
+        pass  # fully blacked out — no UI drawn over the crack
+    elif game_phase in [PHASE_TUTORIAL, PHASE_TUTORIAL_MP, PHASE_INSTRUCT, PHASE_PREPARE]:
         tutorial.handle_tutorial_rendering(screen, ui_font, title_font, countdown_font, game_phase, tutorial_count, now, locals().get('ready_timer', 0), mp_tutorial_count)
         if game_phase == PHASE_INSTRUCT:
             addons.process_gesture_loading_bar(screen, thumbs_up_active, ui_font)
@@ -1040,8 +1007,9 @@ Next is the hit collision engine. During gameplay, the game checks to register i
         stage_names = {1: "STAGE 1 — CASUAL", 2: "STAGE 2 — FASTER", 3: "STAGE 3 — DANGER"}
         stage_txt = ui_font.render(stage_names[current_stage], True, (220, 200, 255))
         screen.blit(stage_txt, (WIDTH // 2 - stage_txt.get_width() // 2, 20))
-        # Target reminder
-        target_txt = ui_font.render(f"TARGET: {STAGE_TARGETS[current_stage]} GHOSTS", True, (180, 180, 220))
+        # Points-remaining reminder (replaces the old static "TARGET: X GHOSTS" label)
+        points_remaining = max(0, STAGE_TARGETS[current_stage] - score)
+        target_txt = ui_font.render(f"{points_remaining} MORE TO CLEAR STAGE {current_stage}", True, (180, 180, 220))
         screen.blit(target_txt, (WIDTH // 2 - target_txt.get_width() // 2, 62))
         # Multiplayer mode indicator
         if multiplayer_mode:
@@ -1055,7 +1023,7 @@ Next is the hit collision engine. During gameplay, the game checks to register i
     # Rendered on top of everything else so it's always visible.
     # Only shown during PHASE_GAMEPLAY when the lock is active.
     # =================================================================
-    if multiplayer_mode and mp_tracking_locked and game_phase == PHASE_GAMEPLAY:
+    if multiplayer_mode and mp_tracking_locked and game_phase == PHASE_GAMEPLAY and not boss_blackout_active:
         p1_visible = tracked_cursor is not None and not is_too_small
         p2_visible = tracked_cursor_p2 is not None
 
@@ -1086,7 +1054,7 @@ Next is the hit collision engine. During gameplay, the game checks to register i
     # =================================================================
     # === LIVE CAMERA DEBUG WINDOW LAYER (BOTTOM LEFT CORNER) ===
     # =================================================================
-    if game_phase in [PHASE_INTRO, PHASE_TUTORIAL, PHASE_TUTORIAL_MP, PHASE_GAMEPLAY, PHASE_INSTRUCT] and rgb_frame is not None and show_debug_camera:
+    if game_phase in [PHASE_INTRO, PHASE_TUTORIAL, PHASE_TUTORIAL_MP, PHASE_GAMEPLAY, PHASE_INSTRUCT] and rgb_frame is not None and show_debug_camera and not boss_blackout_active:
         camera_surface = pygame.surfarray.make_surface(rgb_frame.swapaxes(0, 1))
         
         debug_w, debug_h = 320, 240
@@ -1122,11 +1090,15 @@ Next is the hit collision engine. During gameplay, the game checks to register i
         debug_txt = pygame.transform.scale(debug_txt, (80, 18))
         screen.blit(debug_txt, (dx + 10, dy + debug_h + 12))
 
+    # === PAUSE OVERLAY — drawn onto `screen` BEFORE the scale/blit step ===
+    # (previously this ran after real_screen already had the frame blitted,
+    # so the overlay never actually made it to the display)
+    if is_paused:
+        designs.draw_pause_overlay(screen, title_font, ui_font)
+
     # Scale the internal virtual surface to match native hardware window
     scaled_surface = pygame.transform.scale(screen, (NATIVE_WIDTH, NATIVE_HEIGHT))
     real_screen.blit(scaled_surface, (0, 0))
-    if is_paused:
-        designs.draw_pause_overlay(screen, title_font, ui_font)
 
     pygame.display.flip()
     clock.tick(60)
